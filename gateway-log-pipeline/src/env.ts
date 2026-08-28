@@ -28,4 +28,13 @@ export interface Env {
 
   /** Optional shared secret gating the manual POST /run test endpoint. */
   RUN_TOKEN?: string;
+
+  /** Account ID for the Zero Trust Gateway Rules API (not sensitive -- it's
+   * visible in the dashboard URL, hence a plain var). Paired with
+   * CF_API_TOKEN to resolve gateway_http's PolicyID to its human-readable
+   * PolicyName, since PolicyName often arrives blank in the log itself.
+   * Both optional -- unset just falls back to showing the raw PolicyID. */
+  CF_ACCOUNT_ID?: string;
+  /** API token with Account > Zero Trust > Read permission. */
+  CF_API_TOKEN?: string;
 }

@@ -9,6 +9,12 @@
 # i.e. the primary auth path for the current no-domain nginx setup.
 LOKI_API_KEY=
 
+# API token with Account > Zero Trust > Read, paired with wrangler.toml's
+# CF_ACCOUNT_ID var, used to resolve Gateway PolicyID -> PolicyName via the
+# Cloudflare API (gateway_http's own PolicyName field is often blank). Leave
+# blank to just show the raw PolicyID in Grafana instead.
+CF_API_TOKEN=
+
 # Cloudflare Access Service Token -- only relevant if a domain + Cloudflare
 # Tunnel + Access fronts Loki instead of nginx Basic Auth.
 CF_ACCESS_CLIENT_ID=

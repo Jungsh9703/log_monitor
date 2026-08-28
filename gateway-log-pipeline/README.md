@@ -158,6 +158,20 @@ wrangler secret put RUN_TOKEN         # 선택
 (도메인을 마련해서 Cloudflare Tunnel + Access로 바꾸는 경우에만 대신 `CF_ACCESS_CLIENT_ID`/
 `CF_ACCESS_CLIENT_SECRET`을 씁니다 — `src/loki.ts`가 둘 다 지원합니다.)
 
+**선택: Gateway 정책 이름 표시** — `gateway_http` 로그의 `PolicyName` 필드가 계정에 따라 빈
+값으로 오는 경우가 많아서(`PolicyID`만 신뢰 가능), Cloudflare API로 ID→이름을 조회해서 채워주는
+기능이 있습니다. 안 하면 Grafana에 정책 이름 대신 UUID가 표시될 뿐, 다른 기능에는 지장 없습니다.
+
+1. Cloudflare 대시보드 → 우측 상단 프로필 → **My Profile → API Tokens → Create Token** →
+   Custom token → Permissions: **Account → Zero Trust → Read**
+2. 계정 ID는 대시보드 우측 사이드바 또는 `wrangler whoami`로 확인
+3. ```bash
+   wrangler secret put CF_API_TOKEN
+   ```
+   그리고 `wrangler.toml`의 `CF_ACCOUNT_ID`를 채우기
+
+30분 캐시(Durable Object에 저장)로 API를 매 cron마다 호출하지 않도록 했습니다.
+
 ### 5. 배포
 
 ```bash

@@ -6,6 +6,12 @@ export interface ObjectCursor {
 }
 
 const COMPLETED_SET_KEY = "completed-set";
+const POLICY_NAME_CACHE_KEY = "policy-name-cache";
+
+export interface PolicyNameCache {
+  names: Record<string, string>;
+  fetchedAt: number;
+}
 
 /**
  * Holds the ingestion cursor state as a single global instance (see
@@ -36,5 +42,13 @@ export class IngestCursor extends DurableObject {
 
   async deleteObjectCursor(key: string): Promise<void> {
     await this.ctx.storage.delete(`cursor:${key}`);
+  }
+
+  async getPolicyNameCache(): Promise<PolicyNameCache | null> {
+    return (await this.ctx.storage.get<PolicyNameCache>(POLICY_NAME_CACHE_KEY)) ?? null;
+  }
+
+  async savePolicyNameCache(cache: PolicyNameCache): Promise<void> {
+    await this.ctx.storage.put(POLICY_NAME_CACHE_KEY, cache);
   }
 }

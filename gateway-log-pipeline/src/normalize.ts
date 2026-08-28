@@ -43,19 +43,22 @@ export function parseTimeMs(value: unknown): number {
  * extractError, this never filters anything out; every line that parses as
  * JSON becomes one record. Field names follow Cloudflare's documented
  * gateway_http schema, but verify against a real delivered object -- some
- * fields can be blank depending on plan/config.
+ * fields can be blank depending on plan/config (PolicyName in particular is
+ * often blank; policyNames, if provided, resolves PolicyID via the
+ * Cloudflare API instead -- see policy_names.ts).
  */
-export function normalizeRecord(raw: Record<string, unknown>): LogRecord {
+export function normalizeRecord(raw: Record<string, unknown>, policyNames?: Map<string, string>): LogRecord {
   const action = str(raw.Action);
   const statusCode = num(raw.HTTPStatusCode ?? raw.HttpStatusCode ?? raw.StatusCode);
+  const policyId = str(raw.PolicyID);
 
   return {
     timestampMs: parseTimeMs(raw.Datetime),
     rayId: str(raw.RayID) ?? str(raw.RayId),
     action: action ?? "unknown",
     statusCode,
-    policyId: str(raw.PolicyID),
-    policyName: str(raw.PolicyName) ?? str(raw.PolicyID),
+    policyId,
+    policyName: (policyId && policyNames?.get(policyId)) || str(raw.PolicyName) || policyId,
     host: str(raw.HTTPHost) ?? str(raw.Host),
     url: str(raw.URL),
     method: str(raw.Method),

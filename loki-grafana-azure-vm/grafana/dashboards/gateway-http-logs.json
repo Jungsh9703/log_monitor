@@ -3,32 +3,35 @@
   "uid": "gateway-http-logs",
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 1,
+  "version": 2,
   "refresh": "30s",
   "time": { "from": "now-6h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "identity",
+        "label": "User",
+        "type": "query",
+        "datasource": { "type": "loki", "uid": "loki" },
+        "query": "label_values({job=\"gateway_http_logs\"} | json, identity)",
+        "multi": true,
+        "includeAll": true,
+        "current": { "text": "All", "value": "$__all" },
+        "refresh": 2,
+        "sort": 1
+      }
+    ]
+  },
   "panels": [
     {
       "id": 1,
       "type": "stat",
       "title": "Total requests (last 1h)",
-      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "gridPos": { "h": 8, "w": 6, "x": 0, "y": 0 },
       "datasource": { "type": "loki", "uid": "loki" },
       "targets": [
         {
-          "expr": "sum(count_over_time({job=\"gateway_http_logs\"}[1h]))",
-          "refId": "A"
-        }
-      ]
-    },
-    {
-      "id": 2,
-      "type": "stat",
-      "title": "Errors: blocked/isolated + 4xx/5xx (last 1h)",
-      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 4 },
-      "datasource": { "type": "loki", "uid": "loki" },
-      "targets": [
-        {
-          "expr": "sum(count_over_time({job=\"gateway_http_logs\"} | json | status_code>=400 or action!=\"allow\" [1h]))",
+          "expr": "sum(count_over_time({job=\"gateway_http_logs\"} | json | identity=~\"$identity\" [1h]))",
           "refId": "A"
         }
       ]
@@ -41,7 +44,7 @@
       "datasource": { "type": "loki", "uid": "loki" },
       "targets": [
         {
-          "expr": "sum by (action) (count_over_time({job=\"gateway_http_logs\"}[$__interval]))",
+          "expr": "sum by (action) (count_over_time({job=\"gateway_http_logs\"} | json | identity=~\"$identity\" [$__interval]))",
           "refId": "A",
           "legendFormat": "{{action}}"
         }
@@ -55,7 +58,7 @@
       "datasource": { "type": "loki", "uid": "loki" },
       "targets": [
         {
-          "expr": "topk(10, sum by (host) (count_over_time({job=\"gateway_http_logs\"} | json | host != \"\" [1h])))",
+          "expr": "topk(10, sum by (host) (count_over_time({job=\"gateway_http_logs\"} | json | host != \"\" | identity=~\"$identity\" [1h])))",
           "refId": "A"
         }
       ]
@@ -68,7 +71,7 @@
       "datasource": { "type": "loki", "uid": "loki" },
       "targets": [
         {
-          "expr": "sum by (status_code) (count_over_time({job=\"gateway_http_logs\"} | json | status_code != \"\" [1h]))",
+          "expr": "sum by (status_code) (count_over_time({job=\"gateway_http_logs\"} | json | status_code != \"\" | identity=~\"$identity\" [1h]))",
           "refId": "A",
           "instant": true,
           "format": "table"
@@ -83,7 +86,7 @@
       "datasource": { "type": "loki", "uid": "loki" },
       "targets": [
         {
-          "expr": "sum by (policy_name) (count_over_time({job=\"gateway_http_logs\", action!=\"allow\"} | json | policy_name != \"\" [1h]))",
+          "expr": "sum by (policy_name) (count_over_time({job=\"gateway_http_logs\", action!=\"allow\"} | json | policy_name != \"\" | identity=~\"$identity\" [1h]))",
           "refId": "A",
           "instant": true,
           "format": "table"
@@ -103,7 +106,7 @@
       },
       "targets": [
         {
-          "expr": "{job=\"gateway_http_logs\"}",
+          "expr": "{job=\"gateway_http_logs\"} | json | identity=~\"$identity\"",
           "refId": "A"
         }
       ]

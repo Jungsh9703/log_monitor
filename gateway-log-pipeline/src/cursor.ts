@@ -1,7 +1,7 @@
 import type { Env } from "./env";
-import type { ObjectCursor } from "./cursor_do";
+import type { ObjectCursor, PolicyNameCache } from "./cursor_do";
 
-export type { ObjectCursor };
+export type { ObjectCursor, PolicyNameCache };
 
 // One fixed Durable Object instance backs the whole pipeline's cursor
 // state -- see cursor_do.ts for why this replaced Workers KV.
@@ -31,4 +31,12 @@ export async function putObjectCursor(env: Env, key: string, cursor: ObjectCurso
 
 export async function deleteObjectCursor(env: Env, key: string): Promise<void> {
   await stub(env).deleteObjectCursor(key);
+}
+
+export async function getPolicyNameCache(env: Env): Promise<PolicyNameCache | null> {
+  return stub(env).getPolicyNameCache();
+}
+
+export async function savePolicyNameCache(env: Env, cache: PolicyNameCache): Promise<void> {
+  await stub(env).savePolicyNameCache(cache);
 }

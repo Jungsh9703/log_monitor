@@ -1,6 +1,10 @@
 import type { Env } from "./env";
 import { runIngestion } from "./ingest";
 
+// Durable Object classes must be exported from the Worker's main module for
+// wrangler to find the class named in wrangler.toml's durable_objects.bindings.
+export { IngestCursor } from "./cursor_do";
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);

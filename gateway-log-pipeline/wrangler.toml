@@ -19,20 +19,33 @@ compatibility_date = "2025-04-01"
 binding = "RAW_LOGS_BUCKET"
 bucket_name = "gateway-log-raw"
 
-# --- KV namespace tracking per-object ingestion cursors + a rolling set of
-# fully-processed object keys, so a cron run can resume large objects across
-# invocations without reprocessing completed ones. ---
-# Create it first: `wrangler kv namespace create CURSOR_KV`
-# then copy the generated id below.
-[[kv_namespaces]]
-binding = "CURSOR_KV"
-id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+# --- Durable Object tracking per-object ingestion cursors + a rolling set
+# of fully-processed object keys, so a cron run can resume large objects
+# across invocations without reprocessing completed ones. A single global
+# instance backs the whole pipeline (see src/cursor.ts). Uses SQLite-backed
+# storage, which runs on the Workers Free plan (unlike the older
+# durable-object storage backend, which required a paid plan). Chosen over
+# Workers KV because KV is only eventually consistent (writes can take up to
+# ~60s to reach every edge location) -- with a 1-minute cron, a KV read
+# could see stale cursor data from the previous run; Durable Object storage
+# is strongly consistent, so this can't happen. No separate resource to
+# create -- the class is defined in src/cursor_do.ts and provisioned by the
+# migration below on first deploy.
+[[durable_objects.bindings]]
+name = "CURSOR_DO"
+class_name = "IngestCursor"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["IngestCursor"]
 
 # --- Periodic ingestion: drains new Logpush objects from R2 and pushes
 # every record to Loki (running on the Azure VM, storing its chunks/index
-# in Azure Blob Storage). ---
+# in Azure Blob Storage). Every 1 minute -- safe now that cursor state is
+# strongly consistent (see above); with KV this would have risked duplicate
+# processing from stale reads.
 [triggers]
-crons = ["*/5 * * * *"]
+crons = ["*/1 * * * *"]
 
 [vars]
 # Upper bounds per scheduled run, tuned to stay inside the free plan's CPU

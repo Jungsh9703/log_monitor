@@ -1,6 +1,8 @@
+import type { IngestCursor } from "./cursor_do";
+
 export interface Env {
   RAW_LOGS_BUCKET: R2Bucket;
-  CURSOR_KV: KVNamespace;
+  CURSOR_DO: DurableObjectNamespace<IngestCursor>;
 
   MAX_OBJECTS_PER_RUN: string;
   MAX_LINES_PER_OBJECT_RUN: string;

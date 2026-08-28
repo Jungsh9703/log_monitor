@@ -7,3 +7,4 @@ dist/
 grafana/data/
 loki/data/
 azurite/
+scripts/.tmp/

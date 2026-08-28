@@ -2,8 +2,9 @@
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/Jungsh9703/log_monitor/tree/main/gateway-log-pipeline)
 
-버튼을 누르면 Cloudflare가 이 서브디렉터리를 읽어 R2 버킷/KV 네임스페이스를 자동 생성하고
-`wrangler deploy`까지 진행합니다. 진행 중 화면에서 `.dev.vars.example`에 있는 시크릿
+버튼을 누르면 Cloudflare가 이 서브디렉터리를 읽어 R2 버킷을 자동 생성하고(Durable Object는
+별도 리소스 생성 없이 배포에 포함된 마이그레이션으로 처리됩니다) `wrangler deploy`까지
+진행합니다. 진행 중 화면에서 `.dev.vars.example`에 있는 시크릿
 (`CF_ACCESS_CLIENT_ID` 등)을 입력하라고 물어봅니다 — 아직 `loki-grafana-azure-vm`을 안
 띄우셨다면 전부 빈 값으로 두고 넘어가도 배포 자체는 됩니다(Loki push만 나중에 안 될 뿐). 버튼이
 대신해주지 않는 것: **Logpush job 생성**(Cloudflare 대시보드에서 직접), **`LOKI_URL` 값
@@ -19,7 +20,7 @@ Zero Trust Gateway HTTP 트래픽 (전체)
         ▼
 Logpush job (dataset: gateway_http) ─────────▶ R2 bucket (raw gzip NDJSON)
                                                         │
-                                          Worker cron (5분, 커서로 이어서 처리)
+                                          Worker cron (1분, 커서로 이어서 처리)
                                           1) gunzip + NDJSON 파싱
                                           2) 필터링 없이 모든 라인을 정규화
                                           3) 정규화된 레코드(+원본 전체) → Loki push (청크 분할)
@@ -47,9 +48,27 @@ Loki + Grafana를 실제로 띄우는 Azure VM 스택은 [`../loki-grafana-azure
 | 볼륨/비용 | 낮음 | **훨씬 높음** — 전체 트래픽만큼 Loki/Azure Blob에 저장됨 |
 | Loki push | 1회 push | 500건 단위로 청크 분할 push (배치가 커서 한 번에 보내면 요청 크기 제한에 걸릴 수 있음) |
 
-두 파이프라인은 R2 버킷과 KV 네임스페이스를 분리해서 서로 간섭하지 않습니다. 나중에
-`gateway-error-pipeline`을 다시 쓰고 싶다면 그냥 그 Worker를 별도로 배포하면 됩니다 (둘 다
-동시에 떠 있어도 무방).
+두 파이프라인은 R2 버킷을 분리해서 서로 간섭하지 않습니다. 나중에 `gateway-error-pipeline`을
+다시 쓰고 싶다면 그냥 그 Worker를 별도로 배포하면 됩니다 (둘 다 동시에 떠 있어도 무방). 참고로
+`gateway-error-pipeline`은 아직 커서 저장소로 Workers KV를 쓰고 5분 주기입니다 — 이 프로젝트만
+아래 이유로 Durable Object + 1분 주기로 바꿨습니다.
+
+## 왜 Workers KV 대신 Durable Object인가
+
+커서 상태(어떤 R2 오브젝트를 어디까지 처리했는지)를 Workers KV에 저장하면, KV는 **최종적
+일관성**(eventually consistent) 모델이라 한 번 쓴 값이 전 세계 엣지에 전파되는 데 최대 60초
+정도 걸릴 수 있습니다. cron이 5분 간격이면 문제가 안 되지만, **1분 간격**으로 줄이면 직전 실행이
+KV에 쓴 커서를 다음 실행이 아직 전파 안 된 오래된 값으로 읽어서 이미 처리한 오브젝트를 중복
+처리하거나 커서가 꼬일 위험이 생깁니다.
+
+Durable Object(`src/cursor_do.ts`의 `IngestCursor`)는 전역에 단 하나의 인스턴스만 존재하고
+모든 읽기/쓰기가 그 인스턴스를 강한 일관성으로 통과하기 때문에 이 문제가 없습니다. Cloudflare
+대시보드에서는 KV/R2/D1처럼 "Storage & Databases"의 별도 상품이 아니라 **Compute → Workers &
+Pages**에 속한 Worker 코드의 일부로 배포됩니다 — `wrangler.toml`의 `durable_objects.bindings` +
+`migrations`가 그 역할을 하고, 별도로 리소스를 만들 필요가 없습니다. SQLite 저장 백엔드를 쓰는
+Durable Object는 Workers **Free 플랜**에서도 동작합니다(예전 저장 백엔드는 유료 플랜 전용이었지만,
+현재는 SQLite 백엔드가 기본이자 무료 플랜 지원 대상입니다 — 배포 시점의 Cloudflare 요금제 페이지로
+한 번 더 확인하는 걸 권장합니다).
 
 ## 볼륨/비용 주의
 
@@ -57,7 +76,9 @@ Loki + Grafana를 실제로 띄우는 Azure VM 스택은 [`../loki-grafana-azure
 빠르게 늘어날 수 있습니다.
 
 - `wrangler.toml`의 `MAX_OBJECTS_PER_RUN`/`MAX_LINES_PER_OBJECT_RUN`을 실제 트래픽에 맞게
-  낮추세요 (기본값은 5분마다 최대 5개 오브젝트 × 2000줄 = 10,000줄).
+  낮추세요 (기본값은 1분마다 최대 5개 오브젝트 × 2000줄 = 10,000줄 — 5분 주기였을 때와 같은
+  값을 그대로 뒀으니, 실제로는 분당 처리량이 5배 늘어난 셈입니다. 트래픽이 많다면 값을 낮춰서
+  시작하세요).
 - Loki 쪽 리텐션(`limits_config.retention_period` 등)을 설정해 오래된 로그를 자동 삭제하는
   것도 고려하세요 — `../loki-grafana-azure-vm/loki-config.yaml`에는 기본값이 없으니 필요하면
   추가하세요.
@@ -93,15 +114,15 @@ docker compose up -d
 
 ## 프로덕션 배포
 
-### 1. R2 버킷 + KV 네임스페이스 생성
+### 1. R2 버킷 생성
 
 ```bash
 wrangler r2 bucket create gateway-log-raw
-wrangler kv namespace create CURSOR_KV
 ```
 
-`wrangler kv namespace create`가 출력한 id를 `wrangler.toml`의 `[[kv_namespaces]]`에 채워
-넣습니다. (`gateway-error-pipeline`의 KV/R2와는 별개로 새로 만드는 것입니다.)
+(`gateway-error-pipeline`의 R2 버킷과는 별개로 새로 만드는 것입니다.) 커서 저장용 Durable
+Object는 별도로 만들 게 없습니다 — `npm run deploy`가 `wrangler.toml`의 마이그레이션을 보고
+알아서 프로비저닝합니다.
 
 ### 2. Logpush job 생성
 

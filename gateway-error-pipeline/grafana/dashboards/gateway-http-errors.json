@@ -1,0 +1,84 @@
+{
+  "title": "Gateway HTTP Errors",
+  "uid": "gateway-http-errors",
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Errors (last 1h)",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "targets": [
+        {
+          "expr": "sum(count_over_time({job=\"gateway_http_errors\"}[1h]))",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Errors over time by action",
+      "gridPos": { "h": 8, "w": 18, "x": 6, "y": 0 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "targets": [
+        {
+          "expr": "sum by (action) (count_over_time({job=\"gateway_http_errors\"}[$__interval]))",
+          "refId": "A",
+          "legendFormat": "{{action}}"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "bargauge",
+      "title": "Top blocked/error hosts (last 1h)",
+      "gridPos": { "h": 8, "w": 6, "x": 0, "y": 4 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "targets": [
+        {
+          "expr": "topk(10, sum by (host) (count_over_time({job=\"gateway_http_errors\"} | json | host != \"\" [1h])))",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "table",
+      "title": "Status code breakdown (last 1h)",
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 12 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "targets": [
+        {
+          "expr": "sum by (status_code) (count_over_time({job=\"gateway_http_errors\"} | json | status_code != \"\" [1h]))",
+          "refId": "A",
+          "instant": true,
+          "format": "table"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "logs",
+      "title": "Recent error log lines",
+      "gridPos": { "h": 10, "w": 16, "x": 8, "y": 12 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending"
+      },
+      "targets": [
+        {
+          "expr": "{job=\"gateway_http_errors\"}",
+          "refId": "A"
+        }
+      ]
+    }
+  ]
+}

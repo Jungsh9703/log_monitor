@@ -15,6 +15,13 @@ common:
     kvstore:
       store: inmemory
 
+# Defaults to a WAL dir relative to the process's working directory, which
+# systemd sets to `/` unless told otherwise -- explicit path avoids Loki
+# trying (and failing, permission denied) to create /wal at the filesystem root.
+ingester:
+  wal:
+    dir: /var/lib/loki/wal
+
 # Loki's chunks + index live in Azure Blob Storage instead of local disk --
 # the VM's own filesystem only holds a tsdb-shipper scratch cache under
 # /var/lib/loki. The account_name/account_key/container_name values below

@@ -25,7 +25,7 @@ apt-get install -y grafana loki
 
 echo "==> Writing Loki config"
 install -m 644 loki-config.yml /etc/loki/config.yml
-mkdir -p /var/lib/loki/tsdb-shipper-active /var/lib/loki/tsdb-shipper-cache /var/lib/loki/compactor
+mkdir -p /var/lib/loki/tsdb-shipper-active /var/lib/loki/tsdb-shipper-cache /var/lib/loki/compactor /var/lib/loki/wal
 # The apt package creates the `loki` user with whatever its default login
 # group is (observed: `nogroup`, not a dedicated `loki` group) -- `loki:`
 # (trailing colon, no group) sets the group to that user's own login group

@@ -1,0 +1,10 @@
+# These files run on Linux (the Azure VM) or are parsed by tools that care
+# about line endings -- force LF regardless of the checking-out machine's
+# core.autocrlf setting, so a Windows checkout -> scp to the VM doesn't
+# silently corrupt the shebang line or config parsing.
+*.sh text eol=lf
+*.conf text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.toml text eol=lf
+*.env.example text eol=lf

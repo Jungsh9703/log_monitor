@@ -15,17 +15,24 @@ Zero Trust Gateway HTTP 트래픽
 Logpush (gateway_http) → R2 (buffer)
       │
       ▼
-Worker cron ──── Loki push API (HTTPS, Cloudflare Access로 보호)
-                                  │
-                     Azure Ubuntu VM
-                     ┌────────────────────────────┐
-                     │  Loki (storage_config.azure)│──▶ Azure Blob Storage (청크/인덱스)
-                     │  Grafana (Loki datasource)  │
-                     │  cloudflared (Tunnel)       │
-                     └────────────────────────────┘
-                                  │
-                          Grafana Dashboard (브라우저)
+Worker cron ──── Loki push (HTTP + Basic Auth) ──▶ VM 공인 IP:3100
+                                                         │
+                                            Azure Ubuntu VM (네이티브 systemd, 컨테이너 없음)
+                                            ┌──────────────────────────────┐
+                                            │ nginx (Basic Auth) → Loki     │──▶ Azure Blob Storage
+                                            │ (storage_config.azure)        │    (청크/인덱스)
+                                            │ Grafana (:3000, Loki 직접 조회)│
+                                            └──────────────────────────────┘
+                                                         │
+                                          브라우저 ──HTTP──▶ VM 공인 IP:3000
+                                                (Grafana Dashboard)
 ```
+
+도메인을 Cloudflare One 계정에 연결해두지 않은 상태라, Cloudflare Tunnel/Access 대신 VM의
+공인 IP에 포트를 나눠서 직접 노출하는 방식을 씁니다 (Loki는 nginx Basic Auth로, Grafana는
+자체 로그인으로 보호). 현재는 TLS 없이 평문 HTTP입니다 — 자세한 트레이드오프는
+[`loki-grafana-azure-vm/README.md`](loki-grafana-azure-vm/README.md)의 "보안에 대해 미리
+말씀드릴 것" 절 참고.
 
 ## 구성
 
@@ -36,8 +43,8 @@ Worker cron ──── Loki push API (HTTPS, Cloudflare Access로 보호)
   에러(정책 차단 + 업스트림 4xx/5xx)만 걸러서 보내는 버전. 전체 로그 대신 에러만 필요해지면
   다시 꺼내 쓸 수 있도록 코드는 남겨뒀습니다.
 - [`loki-grafana-azure-vm/`](loki-grafana-azure-vm) — Azure Ubuntu VM에 Loki(Azure Blob
-  Storage를 저장 백엔드로 사용) + Grafana + Cloudflare Tunnel을 docker compose로 띄우는 스택.
-  위 두 Worker 프로젝트가 공유합니다 (Loki job 라벨이 달라서 Grafana에서 구분됩니다:
+  Storage를 저장 백엔드로 사용) + Grafana를 네이티브 systemd 서비스로 띄우는 스택(컨테이너
+  없음). 위 두 Worker 프로젝트가 공유합니다 (Loki job 라벨이 달라서 Grafana에서 구분됩니다:
   `gateway_http_logs` vs `gateway_http_errors`).
 
 각 디렉터리의 README에 설정/배포 순서가 있습니다. 순서상 `loki-grafana-azure-vm`을 먼저

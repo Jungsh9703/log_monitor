@@ -1,2 +1,4 @@
 .env
+loki.env
 *.log
+.htpasswd

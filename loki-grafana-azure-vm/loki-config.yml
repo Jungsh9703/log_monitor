@@ -1,0 +1,50 @@
+auth_enabled: false
+
+server:
+  # Bound to localhost only -- nginx (see nginx/loki-proxy.conf) is the only
+  # thing allowed to reach Loki directly, listening on the public port (3100)
+  # with Basic Auth in front. Loki itself has no built-in auth.
+  http_listen_address: 127.0.0.1
+  http_listen_port: 3101
+  grpc_listen_address: 127.0.0.1
+  grpc_listen_port: 9096
+
+common:
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+
+# Loki's chunks + index live in Azure Blob Storage instead of local disk --
+# the VM's own filesystem only holds a boltdb-shipper scratch cache under
+# /var/lib/loki. ${...} values are expanded from the environment at startup
+# -- see systemd/loki-override.conf, which adds -config.expand-env=true and
+# an EnvironmentFile pointing at /etc/loki/loki.env.
+storage_config:
+  azure:
+    account_name: ${AZURE_STORAGE_ACCOUNT_NAME}
+    account_key: ${AZURE_STORAGE_ACCOUNT_KEY}
+    container_name: ${AZURE_STORAGE_CONTAINER_NAME}
+  boltdb_shipper:
+    active_index_directory: /var/lib/loki/boltdb-shipper-active
+    cache_location: /var/lib/loki/boltdb-shipper-cache
+    cache_ttl: 24h
+    shared_store: azure
+
+schema_config:
+  configs:
+    - from: 2020-10-24
+      store: boltdb-shipper
+      object_store: azure
+      schema: v11
+      index:
+        prefix: index_
+        period: 24h
+
+limits_config:
+  reject_old_samples: true
+  reject_old_samples_max_age: 168h
+
+compactor:
+  working_directory: /var/lib/loki/compactor
+  shared_store: azure

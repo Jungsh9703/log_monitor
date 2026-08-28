@@ -4,8 +4,9 @@
 
 버튼을 누르면 Cloudflare가 이 서브디렉터리를 읽어 R2 버킷을 자동 생성하고(Durable Object는
 별도 리소스 생성 없이 배포에 포함된 마이그레이션으로 처리됩니다) `wrangler deploy`까지
-진행합니다. 진행 중 화면에서 `.dev.vars.example`에 있는 시크릿
-(`CF_ACCESS_CLIENT_ID` 등)을 입력하라고 물어봅니다 — 아직 `loki-grafana-azure-vm`을 안
+진행합니다. 진행 중 화면에서 `.dev.vars.example`에 있는 시크릿(`LOKI_USERNAME`/`LOKI_API_KEY`
+— `loki-grafana-azure-vm`의 nginx Basic Auth 계정, 또는 도메인이 있어서 Cloudflare Access를
+쓴다면 `CF_ACCESS_CLIENT_ID` 등)을 입력하라고 물어봅니다 — 아직 `loki-grafana-azure-vm`을 안
 띄우셨다면 전부 빈 값으로 두고 넘어가도 배포 자체는 됩니다(Loki push만 나중에 안 될 뿐). 버튼이
 대신해주지 않는 것: **Logpush job 생성**(Cloudflare 대시보드에서 직접), **`LOKI_URL` 값
 갱신**과 **시크릿 재설정**(Loki가 준비된 후 `wrangler secret put ...`으로).
@@ -135,17 +136,22 @@ Cloudflare 대시보드 → 계정 홈 → **Analytics & Logs → Logpush** → 
 ### 3. Azure VM에 Loki + Grafana 배포
 
 아직 안 했다면 [`../loki-grafana-azure-vm/README.md`](../loki-grafana-azure-vm/README.md)를
-먼저 진행해서 `https://loki-push.<도메인>/loki/api/v1/push`를 확보하세요
-(`gateway-error-pipeline`과 같은 Loki 인스턴스를 공유해도 됩니다 — job 라벨이 달라서 Grafana
-에서 구분됩니다).
+먼저 진행해서 `http://<VM_PUBLIC_IP>:3100/loki/api/v1/push`와 nginx Basic Auth 계정을
+확보하세요 (`gateway-error-pipeline`과 같은 Loki 인스턴스를 공유해도 됩니다 — job 라벨이
+달라서 Grafana에서 구분됩니다).
 
 ### 4. wrangler.toml 값 + 시크릿 설정
 
+`wrangler.toml`의 `LOKI_URL`을 3단계에서 만든 주소로 바꾸고:
+
 ```bash
-wrangler secret put CF_ACCESS_CLIENT_ID
-wrangler secret put CF_ACCESS_CLIENT_SECRET
+wrangler secret put LOKI_USERNAME     # loki-grafana-azure-vm에서 만든 nginx Basic Auth 사용자명
+wrangler secret put LOKI_API_KEY      # 같은 계정의 비밀번호
 wrangler secret put RUN_TOKEN        # 선택
 ```
+
+(도메인을 마련해서 Cloudflare Tunnel + Access로 바꾸는 경우에만 대신 `CF_ACCESS_CLIENT_ID`/
+`CF_ACCESS_CLIENT_SECRET`을 씁니다 — `src/loki.ts`가 둘 다 지원합니다.)
 
 ### 5. 배포
 

@@ -1,27 +1,43 @@
 # Loki + Grafana on an Azure Ubuntu VM
 
-`gateway-error-pipeline`(Cloudflare Worker)이 필터링한 Gateway HTTP 에러를 받아서, Azure Blob
-Storage를 저장 백엔드로 쓰는 Loki + 그걸 시각화하는 Grafana를 Azure Ubuntu VM 위에 띄우는
-스택입니다.
+`gateway-log-pipeline`(Cloudflare Worker)이 보낸 로그를 받는 Loki + 그걸 보는 Grafana를,
+Azure Ubuntu VM에 **네이티브 systemd 서비스**로(컨테이너 없이) 띄우는 구성입니다. 도메인이 없어도
+되도록 Cloudflare Tunnel/Access는 쓰지 않고, VM이 이미 공인 IP를 가진 상태라는 전제로 두 서비스를
+서로 다른 포트에 직접 노출합니다.
 
 ```
-Worker (Cloudflare) ──HTTPS(Loki push API)──▶ Cloudflare Tunnel ──▶ 이 VM
-                                                                      │
-                                                        ┌─────────────┴─────────────┐
-                                                        │  loki (컨테이너)           │
-                                                        │  storage_config.azure  ───┼──▶ Azure Blob Storage
-                                                        │  grafana (컨테이너)        │      (청크 + 인덱스)
-                                                        │  cloudflared (컨테이너)    │
-                                                        └───────────────────────────┘
-                                                                      │
-                                                     브라우저 ──HTTPS── Cloudflare Tunnel
-                                                     (Grafana 대시보드)
+Worker (Cloudflare) ──HTTP + Basic Auth──▶ VM 공인 IP:3100 ──▶ nginx ──▶ Loki (127.0.0.1:3101)
+                                                                            │
+                                                                storage_config.azure
+                                                                            ▼
+                                                                   Azure Blob Storage
+                                                                   (청크 + 인덱스)
+
+브라우저 ──HTTP──▶ VM 공인 IP:3000 ──▶ Grafana (Loki를 127.0.0.1:3101로 직접 조회)
 ```
 
-VM에는 **인바운드 포트를 하나도 열지 않습니다.** `cloudflared`가 Cloudflare로 아웃바운드
-연결만 유지하고, Loki push 엔드포인트와 Grafana UI 둘 다 Cloudflare Tunnel의 Public Hostname을
-통해서만 도달 가능합니다. Loki push는 **Cloudflare Access Service Token**으로, Grafana UI는
-**Access의 사용자 로그인 정책**으로 각각 보호합니다.
+- **포트 3100** (Loki push): nginx가 Basic Auth로 막고 내부의 Loki(127.0.0.1:3101, 외부에서
+  직접 접근 불가)로 프록시합니다. Loki 자체엔 인증 기능이 없어서 nginx가 유일한 방어선입니다.
+- **포트 3000** (Grafana): Grafana 자체 로그인으로 보호되어 공인 IP에 바로 노출됩니다.
+
+## 보안에 대해 미리 말씀드릴 것
+
+지금 구성은 **TLS 없이 평문 HTTP**입니다 — 도메인이 없어서 정식 인증서를 받기 어려운 상태를
+감안한 "일단 돌아가게" 구성입니다. 즉 Basic Auth 자격증명과 로그 내용이 암호화 없이 오갑니다.
+당장 문제되진 않지만, 나중에 강화하고 싶다면:
+
+- **Azure NSG에서 3100 포트의 인바운드 소스를 `0.0.0.0/0` 대신 Cloudflare의 공개 IP
+  대역**(https://www.cloudflare.com/ips/)**으로 제한** — Worker만 두드릴 수 있으면 되므로, 이것만
+  해도 노출 범위가 크게 줄어듭니다. (3000/Grafana는 사람이 아무 데서나 접속해야 하므로 이 방식이
+  잘 안 맞습니다.)
+- 나중에 도메인을 하나 마련하게 되면 [nip.io](https://nip.io) 같은 걸 안 쓰고도 정식 도메인
+  기준으로 nginx에 Let's Encrypt(certbot)를 붙여 양쪽 다 HTTPS로 바꿀 수 있습니다.
+- Grafana는 설치 직후 기본 비밀번호(`admin`/`admin`)이므로 **반드시** 바로 바꾸세요 (아래 3단계).
+
+## 사전 준비
+
+- Ubuntu 22.04/24.04 Azure VM (이미 공인 IP로 배포되어 있다고 하셨으니 그대로 사용)
+- Azure Storage 계정 + 컨테이너 (Loki 백엔드용)
 
 ## 1. Azure Storage 계정 + 컨테이너 생성 (Loki 백엔드)
 
@@ -45,93 +61,102 @@ az storage container create \
   --account-key "$ACCOUNT_KEY"
 ```
 
-계정 이름과 `$ACCOUNT_KEY`를 아래 4단계의 `.env`에 넣습니다.
-
-## 2. Ubuntu VM 생성 + Docker 설치
+## 2. 이 디렉터리를 VM으로 복사
 
 ```bash
-az vm create \
-  --resource-group gateway-logs-rg \
-  --name gateway-logs-vm \
-  --image Ubuntu2404 \
-  --size Standard_B2s \
-  --admin-username azureuser \
-  --generate-ssh-keys
-
+scp -r loki-grafana-azure-vm azureuser@<VM_PUBLIC_IP>:~/
 ssh azureuser@<VM_PUBLIC_IP>
+cd loki-grafana-azure-vm
 ```
 
-VM 안에서:
+## 3. 설치 스크립트 실행
 
 ```bash
-curl -fsSL https://get.docker.com | sudo sh
-sudo usermod -aG docker $USER
-newgrp docker
+sudo ./install.sh
 ```
 
-이 디렉터리(`loki-grafana-azure-vm/`) 전체를 VM으로 복사합니다 (`scp -r` 또는 git clone).
+apt 저장소 등록, `grafana`/`loki`/`nginx` 설치, 설정 파일 배치, systemd override, nginx 사이트
+등록까지 자동으로 합니다. 끝나면 아래 수동 단계를 안내하는 메시지가 출력됩니다.
 
-## 3. Cloudflare Tunnel + Access 설정 (Zero Trust 대시보드)
-
-이미 Zero Trust를 쓰고 계시니 대시보드에서 그대로 진행하면 됩니다.
-
-1. **Networks → Tunnels → Create a tunnel** → Cloudflared → 이름 지정 (예: `gateway-logs-vm`)
-2. 환경 선택에서 **Docker** 선택 → 표시되는 토큰(`TUNNEL_TOKEN=...`)을 복사 (아래 4단계 `.env`용)
-3. **Public Hostname** 두 개 추가:
-   - `loki-push.<도메인>` → Service: `HTTP` → URL: `loki:3100`
-   - `grafana.<도메인>` → Service: `HTTP` → URL: `grafana:3000`
-   (컨테이너끼리는 같은 docker compose 네트워크 안에서 서비스 이름으로 통신하므로 `localhost`가
-   아니라 `loki`/`grafana`를 씁니다.)
-4. **Access → Applications → Add an application → Self-hosted**
-   - `grafana.<도메인>` 용: 정책에 본인 이메일(또는 기존 Zero Trust ID 프로바이더)만 허용 —
-     브라우저로 로그인할 사람만 통과
-   - `loki-push.<도메인>` 용: 정책 타입을 **Service Auth**로 만들고 **Service Token** 발급 →
-     여기서 나온 **Client ID / Client Secret**을 나중에 `gateway-error-pipeline`의
-     `CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET` 시크릿으로 사용
-
-## 4. `.env` 채우고 배포
+### 3-1. Loki에 Azure 자격증명 넣고 시작
 
 ```bash
-cp .env.example .env
-# AZURE_STORAGE_ACCOUNT_NAME, AZURE_STORAGE_ACCOUNT_KEY, TUNNEL_TOKEN, DOMAIN 채우기
-
-docker compose up -d
-docker compose logs -f loki   # Azure Blob 연결 에러 없이 뜨는지 확인
+sudo vi /etc/loki/loki.env
 ```
+```ini
+AZURE_STORAGE_ACCOUNT_NAME=<1단계에서 만든 이름>
+AZURE_STORAGE_ACCOUNT_KEY=<1단계의 $ACCOUNT_KEY>
+AZURE_STORAGE_CONTAINER_NAME=loki-data
+```
+```bash
+sudo systemctl enable --now loki
+sudo systemctl status loki   # Azure 인증 에러 없이 떴는지 확인
+```
+
+### 3-2. nginx Basic Auth 계정 생성
+
+```bash
+sudo htpasswd -c /etc/nginx/.htpasswd loki-pusher
+sudo systemctl reload nginx
+```
+여기서 정한 사용자명/비밀번호가 나중에 `gateway-log-pipeline`의 `LOKI_USERNAME`/`LOKI_API_KEY`
+시크릿 값이 됩니다.
+
+### 3-3. Grafana 시작 + 기본 비밀번호 변경
+
+```bash
+sudo systemctl enable --now grafana-server
+sudo grafana-cli admin reset-admin-password '<강력한-비밀번호>'
+```
+
+## 4. Azure NSG 인바운드 규칙
+
+Azure Portal → VM → Networking → 인바운드 포트 규칙 추가:
+
+- TCP 3100 (Loki push) — 소스를 Cloudflare IP 대역으로 제한하는 걸 권장(위 "보안" 절 참고),
+  당장 급하면 Any로 시작해도 무방
+- TCP 3000 (Grafana UI) — Any (브라우저로 아무 데서나 접속해야 하므로)
 
 ## 5. 확인
 
-- `https://grafana.<도메인>` 접속 → Access 로그인 → 좌측 Dashboards → **Gateway HTTP Errors**
-  대시보드가 프로비저닝되어 있어야 합니다 (아직 데이터는 없는 게 정상 — Worker가 뭔가 보내야
-  채워집니다).
-- Loki push 엔드포인트가 인증 없이는 막혀 있는지 확인:
-  ```bash
-  curl -i https://loki-push.<도메인>/ready
-  ```
-  Cloudflare Access가 앞에 있으므로 인증 헤더 없이는 302(로그인 리다이렉트) 또는 403이 떠야
-  정상입니다.
+```bash
+curl -u loki-pusher:<3-2에서 정한 비밀번호> http://<VM_PUBLIC_IP>:3100/ready
+# -> "ready"
+```
+
+브라우저로 `http://<VM_PUBLIC_IP>:3000` 접속 → 방금 바꾼 admin 비밀번호로 로그인 → 좌측
+Dashboards에 **Gateway HTTP Logs (All Traffic)** / **Gateway HTTP Errors**가 프로비저닝되어
+있어야 합니다 (아직 데이터는 없는 게 정상 — Worker가 뭔가 보내야 채워집니다).
 
 ## 6. Worker 쪽 연결
 
-`../gateway-error-pipeline/wrangler.toml`의 `LOKI_URL`을
-`https://loki-push.<도메인>/loki/api/v1/push`로 바꾸고, 시크릿을 설정합니다:
+`../gateway-log-pipeline/wrangler.toml`의 `LOKI_URL`을 바꾸고 시크릿을 설정합니다:
+
+```toml
+LOKI_URL = "http://<VM_PUBLIC_IP>:3100/loki/api/v1/push"
+```
 
 ```bash
-cd ../gateway-error-pipeline
-wrangler secret put CF_ACCESS_CLIENT_ID
-wrangler secret put CF_ACCESS_CLIENT_SECRET
+cd ../gateway-log-pipeline
+wrangler secret put LOKI_USERNAME     # 3-2에서 만든 사용자명
+wrangler secret put LOKI_API_KEY      # 3-2에서 만든 비밀번호
 npm run deploy
 ```
 
-이제 실제 Cloudflare Logpush job(`gateway_http` → `gateway-error-raw` R2 버킷)까지 만들어지면,
-5분 cron마다 에러가 이 VM의 Loki로 들어오고 Grafana 대시보드에 반영됩니다.
+Cloudflare Access를 안 쓰므로 `CF_ACCESS_CLIENT_ID`/`CF_ACCESS_CLIENT_SECRET`은 비워두면
+됩니다 (`src/loki.ts`가 두 세트를 다 지원하고, 설정 안 된 쪽은 그냥 헤더를 안 붙입니다).
+
+`wrangler tail`로 cron 실행 로그를 보면서 `pushToLoki` 관련 에러(401 등)가 없는지 확인하세요.
 
 ## 트러블슈팅
 
-- `docker compose logs loki`에 Azure 인증 에러가 뜨면 `.env`의 계정 이름/키를 다시 확인하세요.
-- Grafana 대시보드에 패널은 있는데 데이터가 안 뜨면: Worker의 `wrangler tail`로 cron 실행 로그
-  확인 → `pushToLoki` 단계에서 401/403이 뜨면 Access Service Token이 잘못 설정된 것입니다.
-- 컨테이너 재시작 후에도 기존 로그가 남아 있어야 하는 이유가 바로 Azure Blob 백엔드입니다 —
-  `loki-scratch` 볼륨은 캐시일 뿐이고, 실제 청크/인덱스는 Azure Blob 컨테이너(`loki-data`)에
-  있습니다. `az storage blob list --container-name loki-data --account-name <이름> --account-key "$ACCOUNT_KEY"`
+- `systemctl status loki`에 Azure 인증 에러가 뜨면 `/etc/loki/loki.env` 값을 다시 확인하고
+  `sudo systemctl restart loki`.
+- `curl .../ready`가 401이면 nginx Basic Auth 자격증명이 Worker 시크릿과 다른 것 — 3-2에서
+  만든 값과 `wrangler secret`으로 넣은 값이 정확히 같은지 확인하세요.
+- Grafana 대시보드에 패널은 있는데 데이터가 안 뜨면: Worker의 `wrangler tail`로 cron이 실제로
+  도는지, `errorsFound`/`recordsShipped`가 0보다 큰지 먼저 확인하세요.
+- 재부팅 후에도 로그가 남아 있어야 하는 이유가 Azure Blob 백엔드입니다 — `/var/lib/loki`는
+  캐시일 뿐이고, 실제 청크/인덱스는 Azure Blob 컨테이너(`loki-data`)에 있습니다.
+  `az storage blob list --container-name loki-data --account-name <이름> --account-key "$ACCOUNT_KEY"`
   로 실제 오브젝트가 쌓이는지 확인할 수 있습니다.

@@ -11,6 +11,12 @@ server:
 
 common:
   replication_factor: 1
+  # Without this, Loki auto-detects the machine's network interface IP
+  # (e.g. the VM's private IP) for inter-component gRPC calls -- but
+  # grpc_listen_address above is 127.0.0.1, so nothing is actually
+  # listening there, causing "unable to get stream rates from ingester ...
+  # rpc error: Unavailable". Pin it to loopback to match.
+  instance_addr: 127.0.0.1
   ring:
     kvstore:
       store: inmemory

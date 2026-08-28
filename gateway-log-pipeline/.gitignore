@@ -1,0 +1,9 @@
+node_modules/
+.wrangler/
+dist/
+.env
+.dev.vars
+*.log
+grafana/data/
+loki/data/
+azurite/

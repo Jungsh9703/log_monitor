@@ -1,0 +1,56 @@
+name = "gateway-log-pipeline"
+main = "src/index.ts"
+compatibility_date = "2025-04-01"
+
+# Designed to run on the Workers Free plan. Keep the default ("bundled")
+# usage model and the per-run budgets below inside the free tier's CPU limit.
+# Note: this ships EVERY gateway_http log line (no error filter), so volume
+# -- and therefore Loki/Azure Blob storage growth -- is much higher than
+# ../gateway-error-pipeline. Tune MAX_OBJECTS_PER_RUN / MAX_LINES_PER_OBJECT_RUN
+# down if a single cron run is taking too long or Loki push requests are
+# timing out.
+
+# --- R2 bucket that receives the Zero Trust Gateway Logpush job ---
+# Create it first: `wrangler r2 bucket create gateway-log-raw`
+# Then create a Logpush job (dataset: gateway_http) pointed at this bucket
+# -- see README. Use a bucket separate from gateway-error-pipeline's
+# gateway-error-raw so the two jobs/pipelines don't collide.
+[[r2_buckets]]
+binding = "RAW_LOGS_BUCKET"
+bucket_name = "gateway-log-raw"
+
+# --- KV namespace tracking per-object ingestion cursors + a rolling set of
+# fully-processed object keys, so a cron run can resume large objects across
+# invocations without reprocessing completed ones. ---
+# Create it first: `wrangler kv namespace create CURSOR_KV`
+# then copy the generated id below.
+[[kv_namespaces]]
+binding = "CURSOR_KV"
+id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+
+# --- Periodic ingestion: drains new Logpush objects from R2 and pushes
+# every record to Loki (running on the Azure VM, storing its chunks/index
+# in Azure Blob Storage). ---
+[triggers]
+crons = ["*/5 * * * *"]
+
+[vars]
+# Upper bounds per scheduled run, tuned to stay inside the free plan's CPU
+# budget. Raise these only if you've upgraded to a paid Workers plan --
+# and lower them first if volume turns out to be higher than expected.
+MAX_OBJECTS_PER_RUN = "5"
+MAX_LINES_PER_OBJECT_RUN = "2000"
+COMPLETED_SET_CAP = "3000"
+
+# Loki push API endpoint, reachable from the public internet (Workers make
+# outbound requests from Cloudflare's edge, not a fixed IP you can allowlist).
+# Recommended: expose it via a Cloudflare Tunnel on the Azure VM, e.g.
+# "https://loki-push.example.com/loki/api/v1/push" -- see ../loki-grafana-azure-vm/README.md.
+LOKI_URL = "https://loki-push.example.com/loki/api/v1/push"
+
+# --- Secrets (do NOT put these in this file) ---
+# wrangler secret put CF_ACCESS_CLIENT_ID       # if the push endpoint sits behind Cloudflare Access (recommended)
+# wrangler secret put CF_ACCESS_CLIENT_SECRET   # paired with the above
+# wrangler secret put LOKI_USERNAME             # only if using plain Basic Auth instead of Access
+# wrangler secret put LOKI_API_KEY              # paired with the above
+# wrangler secret put RUN_TOKEN                 # optional: shared secret to allow POST /run?token=... manual triggers

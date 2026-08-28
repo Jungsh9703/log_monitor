@@ -55,15 +55,20 @@ MAX_OBJECTS_PER_RUN = "5"
 MAX_LINES_PER_OBJECT_RUN = "2000"
 COMPLETED_SET_CAP = "3000"
 
-# Loki push API endpoint, reachable from the public internet (Workers make
-# outbound requests from Cloudflare's edge, not a fixed IP you can allowlist).
-# Recommended: expose it via a Cloudflare Tunnel on the Azure VM, e.g.
-# "https://loki-push.example.com/loki/api/v1/push" -- see ../loki-grafana-azure-vm/README.md.
-LOKI_URL = "https://loki-push.example.com/loki/api/v1/push"
+# Loki push API endpoint on the Azure VM (see ../loki-grafana-azure-vm), e.g.
+# "http://<vm-public-ip>:3100/loki/api/v1/push" -- plain http, not https
+# (no domain means no real TLS cert), and the :3100 port is required (that's
+# where nginx's Basic-Auth-protected proxy listens, not the default 443).
+LOKI_URL = "http://<vm-public-ip>:3100/loki/api/v1/push"
+
+# Not sensitive (just an identifier, like a username on a login form) --
+# left as a plain var rather than a secret so it isn't masked for no reason
+# in the Cloudflare dashboard / deploy-button UI. Set to whatever user you
+# created with `htpasswd` on the VM (see ../loki-grafana-azure-vm/README.md).
+LOKI_USERNAME = "loki-pusher"
 
 # --- Secrets (do NOT put these in this file) ---
-# wrangler secret put CF_ACCESS_CLIENT_ID       # if the push endpoint sits behind Cloudflare Access (recommended)
+# wrangler secret put LOKI_API_KEY              # the htpasswd password paired with LOKI_USERNAME above
+# wrangler secret put CF_ACCESS_CLIENT_ID       # only if a domain + Cloudflare Access fronts Loki instead of nginx Basic Auth
 # wrangler secret put CF_ACCESS_CLIENT_SECRET   # paired with the above
-# wrangler secret put LOKI_USERNAME             # only if using plain Basic Auth instead of Access
-# wrangler secret put LOKI_API_KEY              # paired with the above
 # wrangler secret put RUN_TOKEN                 # optional: shared secret to allow POST /run?token=... manual triggers

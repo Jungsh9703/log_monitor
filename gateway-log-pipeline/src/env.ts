@@ -8,11 +8,13 @@ export interface Env {
   MAX_LINES_PER_OBJECT_RUN: string;
   COMPLETED_SET_CAP: string;
 
-  /** Loki push API endpoint on the Azure VM, e.g. via a Cloudflare Tunnel
-   * hostname: https://loki-push.example.com/loki/api/v1/push */
+  /** Loki push API endpoint on the Azure VM, e.g.
+   * http://<vm-public-ip>:3100/loki/api/v1/push */
   LOKI_URL: string;
 
-  /** Optional Basic Auth pair for Loki (e.g. behind a plain Nginx proxy). */
+  /** Basic Auth pair for Loki's nginx proxy. USERNAME is a plain var (not
+   * sensitive); API_KEY is a secret. Both optional -- unset skips this auth
+   * path entirely (e.g. if using CF_ACCESS_* instead). */
   LOKI_USERNAME?: string;
   LOKI_API_KEY?: string;
 

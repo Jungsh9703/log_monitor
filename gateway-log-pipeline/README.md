@@ -4,12 +4,14 @@
 
 버튼을 누르면 Cloudflare가 이 서브디렉터리를 읽어 R2 버킷을 자동 생성하고(Durable Object는
 별도 리소스 생성 없이 배포에 포함된 마이그레이션으로 처리됩니다) `wrangler deploy`까지
-진행합니다. 진행 중 화면에서 `.dev.vars.example`에 있는 시크릿(`LOKI_USERNAME`/`LOKI_API_KEY`
-— `loki-grafana-azure-vm`의 nginx Basic Auth 계정, 또는 도메인이 있어서 Cloudflare Access를
-쓴다면 `CF_ACCESS_CLIENT_ID` 등)을 입력하라고 물어봅니다 — 아직 `loki-grafana-azure-vm`을 안
-띄우셨다면 전부 빈 값으로 두고 넘어가도 배포 자체는 됩니다(Loki push만 나중에 안 될 뿐). 버튼이
-대신해주지 않는 것: **Logpush job 생성**(Cloudflare 대시보드에서 직접), **`LOKI_URL` 값
-갱신**과 **시크릿 재설정**(Loki가 준비된 후 `wrangler secret put ...`으로).
+진행합니다. 진행 중 화면에서 `LOKI_URL`/`LOKI_USERNAME`(둘 다 평문 변수)과
+`.dev.vars.example`의 시크릿(`LOKI_API_KEY` — `loki-grafana-azure-vm`의 nginx Basic Auth
+비밀번호, 또는 도메인이 있어서 Cloudflare Access를 쓴다면 `CF_ACCESS_CLIENT_ID` 등)을
+입력하라고 물어봅니다 — 이 필드들 중 진짜 필수인 건 없으니, 아직 `loki-grafana-azure-vm`을 안
+띄우셨다면 전부 빈 값/기본값으로 두고 넘어가도 배포 자체는 됩니다(Loki push만 나중에 안 될
+뿐). 버튼이 대신해주지 않는 것: **Logpush job 생성**(Cloudflare 대시보드에서 직접),
+**`LOKI_URL` 값 갱신**과 **시크릿 재설정**(Loki가 준비된 후 Cloudflare 대시보드의 Worker →
+Settings → Variables and Secrets, 또는 `wrangler secret put ...`으로).
 
 `gateway-error-pipeline`은 에러(정책 차단 + 4xx/5xx)만 골라 보냈지만, 이 프로젝트는 **Zero
 Trust Gateway HTTP 로그 전체**를 필터링 없이 Grafana로 보냅니다. 전체 트래픽을 바탕으로 대시보드를
@@ -142,12 +144,12 @@ Cloudflare 대시보드 → 계정 홈 → **Analytics & Logs → Logpush** → 
 
 ### 4. wrangler.toml 값 + 시크릿 설정
 
-`wrangler.toml`의 `LOKI_URL`을 3단계에서 만든 주소로 바꾸고:
+`wrangler.toml`의 `LOKI_URL`/`LOKI_USERNAME`(둘 다 평문 변수)을 3단계에서 만든 주소/계정으로
+바꾸고, 비밀번호만 시크릿으로 등록합니다:
 
 ```bash
-wrangler secret put LOKI_USERNAME     # loki-grafana-azure-vm에서 만든 nginx Basic Auth 사용자명
-wrangler secret put LOKI_API_KEY      # 같은 계정의 비밀번호
-wrangler secret put RUN_TOKEN        # 선택
+wrangler secret put LOKI_API_KEY      # nginx Basic Auth 계정의 비밀번호
+wrangler secret put RUN_TOKEN         # 선택
 ```
 
 (도메인을 마련해서 Cloudflare Tunnel + Access로 바꾸는 경우에만 대신 `CF_ACCESS_CLIENT_ID`/

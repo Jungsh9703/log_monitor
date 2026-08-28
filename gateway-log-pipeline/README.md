@@ -1,5 +1,14 @@
 # Gateway Log Pipeline
 
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/Jungsh9703/log_monitor/tree/main/gateway-log-pipeline)
+
+버튼을 누르면 Cloudflare가 이 서브디렉터리를 읽어 R2 버킷/KV 네임스페이스를 자동 생성하고
+`wrangler deploy`까지 진행합니다. 진행 중 화면에서 `.dev.vars.example`에 있는 시크릿
+(`CF_ACCESS_CLIENT_ID` 등)을 입력하라고 물어봅니다 — 아직 `loki-grafana-azure-vm`을 안
+띄우셨다면 전부 빈 값으로 두고 넘어가도 배포 자체는 됩니다(Loki push만 나중에 안 될 뿐). 버튼이
+대신해주지 않는 것: **Logpush job 생성**(Cloudflare 대시보드에서 직접), **`LOKI_URL` 값
+갱신**과 **시크릿 재설정**(Loki가 준비된 후 `wrangler secret put ...`으로).
+
 `gateway-error-pipeline`은 에러(정책 차단 + 4xx/5xx)만 골라 보냈지만, 이 프로젝트는 **Zero
 Trust Gateway HTTP 로그 전체**를 필터링 없이 Grafana로 보냅니다. 전체 트래픽을 바탕으로 대시보드를
 구성하려는 목적이라 `gateway-error-pipeline`은 당분간 사용하지 않습니다 (코드는 남겨둠).

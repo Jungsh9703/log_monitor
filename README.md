@@ -2,6 +2,12 @@
 
 Cloudflare Zero Trust Gateway HTTP 로그를 Grafana 대시보드로 보는 파이프라인.
 
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/Jungsh9703/log_monitor/tree/main/gateway-log-pipeline)
+
+위 버튼은 현재 사용 중인 `gateway-log-pipeline`의 Worker만 배포합니다 (R2 버킷/KV 네임스페이스
+자동 생성 포함). Logpush job 생성과 Loki 관련 설정은 버튼이 대신해주지 않으니 아래 순서를
+참고하세요.
+
 ```
 Zero Trust Gateway HTTP 트래픽
       │

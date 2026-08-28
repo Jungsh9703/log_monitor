@@ -1,5 +1,10 @@
 # Gateway Error Pipeline
 
+> **현재 미사용** — `gateway-log-pipeline`(전체 로그 수집)으로 대체되어 지금은 배포하지
+> 않습니다. 나중에 에러만 다시 걸러보고 싶어지면 이 프로젝트를 그대로 배포하면 됩니다.
+
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/Jungsh9703/log_monitor/tree/main/gateway-error-pipeline)
+
 Zero Trust Gateway HTTP 로그 중 **에러(정책 차단 + 업스트림 4xx/5xx)** 만 걸러서 Grafana
 대시보드에 실시간으로 띄우기 위한 Cloudflare Worker입니다.
 

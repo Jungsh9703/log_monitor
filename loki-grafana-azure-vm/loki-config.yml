@@ -16,30 +16,35 @@ common:
       store: inmemory
 
 # Loki's chunks + index live in Azure Blob Storage instead of local disk --
-# the VM's own filesystem only holds a boltdb-shipper scratch cache under
+# the VM's own filesystem only holds a tsdb-shipper scratch cache under
 # /var/lib/loki. The account_name/account_key/container_name values below
 # are placeholders expanded from the environment at startup -- see
 # systemd/loki-override.conf, which adds -config.expand-env=true and an
 # EnvironmentFile pointing at /etc/loki/loki.env. NOTE: expand-env scans the
 # whole file as text, including comments -- never write a literal dollar
 # sign followed by braces in a comment here, or Loki will fail to parse it.
+#
+# Uses tsdb_shipper (Loki 3.x's index format), not the deprecated
+# boltdb_shipper/shared_store from Loki 2.x -- Loki 3.x removed the
+# shared_store field entirely (chunks and index for a schema period now
+# always share the single object_store named in schema_config).
 storage_config:
   azure:
     account_name: ${AZURE_STORAGE_ACCOUNT_NAME}
     account_key: ${AZURE_STORAGE_ACCOUNT_KEY}
     container_name: ${AZURE_STORAGE_CONTAINER_NAME}
-  boltdb_shipper:
-    active_index_directory: /var/lib/loki/boltdb-shipper-active
-    cache_location: /var/lib/loki/boltdb-shipper-cache
+    use_managed_identity: false
+  tsdb_shipper:
+    active_index_directory: /var/lib/loki/tsdb-shipper-active
+    cache_location: /var/lib/loki/tsdb-shipper-cache
     cache_ttl: 24h
-    shared_store: azure
 
 schema_config:
   configs:
     - from: 2020-10-24
-      store: boltdb-shipper
+      store: tsdb
       object_store: azure
-      schema: v11
+      schema: v13
       index:
         prefix: index_
         period: 24h
@@ -50,4 +55,3 @@ limits_config:
 
 compactor:
   working_directory: /var/lib/loki/compactor
-  shared_store: azure

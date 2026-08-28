@@ -88,12 +88,16 @@ az storage container create `
   --account-key "$ACCOUNT_KEY"
 ```
 
-## 2. 이 디렉터리를 VM으로 복사
+## 2. VM에 SSH로 들어가서 저장소 clone
+
+저장소가 GitHub에 공개되어 있으므로, 로컬에서 `scp`로 파일을 옮길 필요 없이 VM 안에서 바로
+받으면 됩니다 (Azure Cloud Shell에서 `ssh`로 들어가도 되고, 어디서 접속하든 상관없습니다).
 
 ```bash
-scp -r loki-grafana-azure-vm azureuser@<VM_PUBLIC_IP>:~/
 ssh azureuser@<VM_PUBLIC_IP>
-cd loki-grafana-azure-vm
+sudo apt-get install -y git   # 이미 있으면 생략됨
+git clone https://github.com/Jungsh9703/log_monitor.git
+cd log_monitor/loki-grafana-azure-vm
 ```
 
 ## 3. 설치 스크립트 실행

@@ -41,6 +41,11 @@ Worker (Cloudflare) ──HTTP + Basic Auth──▶ VM 공인 IP:3100 ──▶
 
 ## 1. Azure Storage 계정 + 컨테이너 생성 (Loki 백엔드)
 
+이 명령어들은 VM 안이 아니라 **Azure CLI(`az`)가 설치된 아무 곳**에서 실행합니다 — Azure
+Cloud Shell(portal.azure.com 상단의 `>_` 아이콘, 설치 불필요) 또는 로컬 PC.
+
+Bash / Cloud Shell(기본이 Bash):
+
 ```bash
 az group create --name gateway-logs-rg --location koreacentral
 
@@ -58,6 +63,28 @@ ACCOUNT_KEY=$(az storage account keys list \
 az storage container create \
   --name loki-data \
   --account-name <원하는-고유이름> \
+  --account-key "$ACCOUNT_KEY"
+```
+
+Windows PowerShell (변수 대입 문법이 다릅니다 — `VAR=$(...)`가 아니라 `$VAR = (...)`):
+
+```powershell
+az group create --name gateway-logs-rg --location koreacentral
+
+az storage account create `
+  --name <원하는-고유이름> `
+  --resource-group gateway-logs-rg `
+  --sku Standard_LRS `
+  --kind StorageV2
+
+$ACCOUNT_KEY = (az storage account keys list `
+  --account-name <원하는-고유이름> `
+  --resource-group gateway-logs-rg `
+  --query "[0].value" -o tsv)
+
+az storage container create `
+  --name loki-data `
+  --account-name <원하는-고유이름> `
   --account-key "$ACCOUNT_KEY"
 ```
 

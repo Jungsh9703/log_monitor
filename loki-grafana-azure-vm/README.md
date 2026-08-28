@@ -161,15 +161,20 @@ Dashboards에 **Gateway HTTP Logs (All Traffic)** / **Gateway HTTP Errors**가 �
 
 ## 6. Worker 쪽 연결
 
-`../gateway-log-pipeline/wrangler.toml`의 `LOKI_URL`을 바꾸고 시크릿을 설정합니다:
+`../gateway-log-pipeline/wrangler.toml`의 `LOKI_URL`/`LOKI_USERNAME`(둘 다 평문 변수)을
+바꾸고 비밀번호만 시크릿으로 등록합니다. **`LOKI_URL`은 IP를 그대로 쓰면 안 됩니다** —
+Cloudflare Worker의 `fetch()`가 IP-literal URL을 Cloudflare 엣지로 라우팅하다가 "error code:
+1003"으로 막혀서 VM까지 아예 못 갑니다. 도메인이 없으니 무료 퍼블릭 DNS인
+[nip.io](https://nip.io)로 우회합니다 (`<IP>.nip.io`가 그 IP로 그대로 resolve됨 — VM의
+nginx는 Host 헤더를 안 보니 추가 설정 불필요):
 
 ```toml
-LOKI_URL = "http://<VM_PUBLIC_IP>:3100/loki/api/v1/push"
+LOKI_URL = "http://<VM_PUBLIC_IP>.nip.io:3100/loki/api/v1/push"
+LOKI_USERNAME = "loki-pusher"   # 3-2에서 만든 사용자명
 ```
 
 ```bash
 cd ../gateway-log-pipeline
-wrangler secret put LOKI_USERNAME     # 3-2에서 만든 사용자명
 wrangler secret put LOKI_API_KEY      # 3-2에서 만든 비밀번호
 npm run deploy
 ```

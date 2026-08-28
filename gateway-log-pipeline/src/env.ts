@@ -8,8 +8,11 @@ export interface Env {
   MAX_LINES_PER_OBJECT_RUN: string;
   COMPLETED_SET_CAP: string;
 
-  /** Loki push API endpoint on the Azure VM, e.g.
-   * http://<vm-public-ip>:3100/loki/api/v1/push */
+  /** Loki push API endpoint on the Azure VM. Must be a hostname, not a bare
+   * IP -- Workers' fetch() routes IP-literal URLs through Cloudflare's edge
+   * and gets back its own "error code: 1003" instead of ever reaching the
+   * VM. With no real domain, use nip.io: e.g.
+   * http://<vm-public-ip>.nip.io:3100/loki/api/v1/push */
   LOKI_URL: string;
 
   /** Basic Auth pair for Loki's nginx proxy. USERNAME is a plain var (not

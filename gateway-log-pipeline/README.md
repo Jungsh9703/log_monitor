@@ -138,9 +138,12 @@ Cloudflare 대시보드 → 계정 홈 → **Analytics & Logs → Logpush** → 
 ### 3. Azure VM에 Loki + Grafana 배포
 
 아직 안 했다면 [`../loki-grafana-azure-vm/README.md`](../loki-grafana-azure-vm/README.md)를
-먼저 진행해서 `http://<VM_PUBLIC_IP>:3100/loki/api/v1/push`와 nginx Basic Auth 계정을
-확보하세요 (`gateway-error-pipeline`과 같은 Loki 인스턴스를 공유해도 됩니다 — job 라벨이
-달라서 Grafana에서 구분됩니다).
+먼저 진행해서 `http://<VM_PUBLIC_IP>.nip.io:3100/loki/api/v1/push`와 nginx Basic Auth
+계정을 확보하세요 (`gateway-error-pipeline`과 같은 Loki 인스턴스를 공유해도 됩니다 — job
+라벨이 달라서 Grafana에서 구분됩니다). **`.nip.io`를 꼭 붙이세요** — Cloudflare Worker의
+`fetch()`는 URL이 IP 주소 그대로면 Cloudflare 엣지가 가로채서 자체 "error code: 1003"을
+반환하고 VM까지 아예 도달하지 못합니다. nip.io는 IP를 그대로 도메인처럼 쓰게 해주는 무료
+퍼블릭 DNS라 이 문제를 우회합니다 (VM의 nginx는 Host 헤더를 안 보므로 별도 설정 불필요).
 
 ### 4. wrangler.toml 값 + 시크릿 설정
 

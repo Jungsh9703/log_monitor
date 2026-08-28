@@ -55,11 +55,18 @@ MAX_OBJECTS_PER_RUN = "5"
 MAX_LINES_PER_OBJECT_RUN = "2000"
 COMPLETED_SET_CAP = "3000"
 
-# Loki push API endpoint on the Azure VM (see ../loki-grafana-azure-vm), e.g.
-# "http://<vm-public-ip>:3100/loki/api/v1/push" -- plain http, not https
-# (no domain means no real TLS cert), and the :3100 port is required (that's
-# where nginx's Basic-Auth-protected proxy listens, not the default 443).
-LOKI_URL = "http://<vm-public-ip>:3100/loki/api/v1/push"
+# Loki push API endpoint on the Azure VM (see ../loki-grafana-azure-vm).
+# IMPORTANT: must be a hostname, NOT a bare IP address -- Cloudflare Workers'
+# fetch() routes IP-literal URLs through Cloudflare's edge, which can't map
+# them to a zone and returns its own "error code: 1003" instead of ever
+# reaching the VM. With no real domain available, use nip.io (a public
+# wildcard DNS service that resolves "<ip-with-dots>.nip.io" straight back
+# to that IP -- nginx doesn't check the Host header, so this needs no VM
+# config): "http://<vm-public-ip>.nip.io:3100/loki/api/v1/push". Plain http,
+# not https (no domain means no real TLS cert), and the :3100 port is
+# required (that's where nginx's Basic-Auth-protected proxy listens, not
+# the default 443).
+LOKI_URL = "http://<vm-public-ip>.nip.io:3100/loki/api/v1/push"
 
 # Not sensitive (just an identifier, like a username on a login form) --
 # left as a plain var rather than a secret so it isn't masked for no reason

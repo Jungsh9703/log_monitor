@@ -17,9 +17,12 @@ common:
 
 # Loki's chunks + index live in Azure Blob Storage instead of local disk --
 # the VM's own filesystem only holds a boltdb-shipper scratch cache under
-# /var/lib/loki. ${...} values are expanded from the environment at startup
-# -- see systemd/loki-override.conf, which adds -config.expand-env=true and
-# an EnvironmentFile pointing at /etc/loki/loki.env.
+# /var/lib/loki. The account_name/account_key/container_name values below
+# are placeholders expanded from the environment at startup -- see
+# systemd/loki-override.conf, which adds -config.expand-env=true and an
+# EnvironmentFile pointing at /etc/loki/loki.env. NOTE: expand-env scans the
+# whole file as text, including comments -- never write a literal dollar
+# sign followed by braces in a comment here, or Loki will fail to parse it.
 storage_config:
   azure:
     account_name: ${AZURE_STORAGE_ACCOUNT_NAME}

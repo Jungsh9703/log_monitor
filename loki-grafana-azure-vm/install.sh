@@ -26,7 +26,11 @@ apt-get install -y grafana loki
 echo "==> Writing Loki config"
 install -m 644 loki-config.yml /etc/loki/config.yml
 mkdir -p /var/lib/loki/boltdb-shipper-active /var/lib/loki/boltdb-shipper-cache /var/lib/loki/compactor
-chown -R loki:loki /var/lib/loki
+# The apt package creates the `loki` user with whatever its default login
+# group is (observed: `nogroup`, not a dedicated `loki` group) -- `loki:`
+# (trailing colon, no group) sets the group to that user's own login group
+# instead of assuming a name that may not exist.
+chown -R loki: /var/lib/loki
 
 if [ ! -f /etc/loki/loki.env ]; then
   install -m 600 loki.env.example /etc/loki/loki.env
@@ -42,7 +46,7 @@ echo "==> Writing Grafana provisioning"
 cp -r grafana/provisioning/. /etc/grafana/provisioning/
 mkdir -p /etc/grafana/dashboards
 cp grafana/dashboards/*.json /etc/grafana/dashboards/
-chown -R grafana:grafana /etc/grafana/provisioning /etc/grafana/dashboards
+chown -R grafana: /etc/grafana/provisioning /etc/grafana/dashboards
 
 echo "==> Installing nginx site for Loki's Basic-Auth-protected push endpoint"
 cp nginx/loki-proxy.conf /etc/nginx/sites-available/loki-proxy.conf

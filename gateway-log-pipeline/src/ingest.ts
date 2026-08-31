@@ -4,6 +4,7 @@ import { loadCompletedSet, saveCompletedSet, getObjectCursor, putObjectCursor, d
 import { normalizeRecord, type LogRecord } from "./normalize";
 import { pushToLoki } from "./loki";
 import { getPolicyNameMap } from "./policy_names";
+import { decryptFields } from "./dlp";
 
 async function decompressToText(obj: R2ObjectBody, key: string): Promise<string> {
   const stream = key.endsWith(".gz") ? obj.body.pipeThrough(new DecompressionStream("gzip")) : obj.body;
@@ -29,6 +30,7 @@ export async function runIngestion(env: Env): Promise<IngestSummary> {
 
   const batchRecords: LogRecord[] = [];
   const newlyCompleted: string[] = [];
+  const decryptBudget = { remaining: cfg.maxDecryptionsPerRun };
 
   for (const key of candidateKeys) {
     const obj = await env.RAW_LOGS_BUCKET.get(key);
@@ -53,7 +55,9 @@ export async function runIngestion(env: Env): Promise<IngestSummary> {
       }
       // Unlike gateway-error-pipeline, every parseable line ships -- no
       // Action/HTTPStatusCode gate here.
-      batchRecords.push(normalizeRecord(raw, policyNames));
+      const record = normalizeRecord(raw, policyNames);
+      const decrypted = await decryptFields(raw, env, decryptBudget);
+      batchRecords.push({ ...record, ...decrypted });
     }
 
     const completed = i >= lines.length;

@@ -54,6 +54,10 @@ crons = ["*/1 * * * *"]
 MAX_OBJECTS_PER_RUN = "5"
 MAX_LINES_PER_OBJECT_RUN = "2000"
 COMPLETED_SET_CAP = "3000"
+# Cap on HPKE decrypt operations (GenAI prompt capture + DLP matched-data
+# context) per run -- each is a real ECDH + AEAD op. Only matters if
+# DLP_PRIVATE_KEY is set below.
+MAX_DECRYPTIONS_PER_RUN = "20"
 
 # Loki push API endpoint on the Azure VM (see ../loki-grafana-azure-vm).
 # IMPORTANT: must be a hostname, NOT a bare IP address -- Cloudflare Workers'
@@ -83,6 +87,7 @@ CF_ACCOUNT_ID = ""
 # --- Secrets (do NOT put these in this file) ---
 # wrangler secret put LOKI_API_KEY              # the htpasswd password paired with LOKI_USERNAME above
 # wrangler secret put CF_API_TOKEN              # API token with Account > Zero Trust > Read, paired with CF_ACCOUNT_ID above
+# wrangler secret put DLP_PRIVATE_KEY           # base64 DLP Payload Encryption private key (Zero Trust > Settings > DLP) -- decrypts GenAI prompt capture + DLP matched-data context
 # wrangler secret put CF_ACCESS_CLIENT_ID       # only if a domain + Cloudflare Access fronts Loki instead of nginx Basic Auth
 # wrangler secret put CF_ACCESS_CLIENT_SECRET   # paired with the above
 # wrangler secret put RUN_TOKEN                 # optional: shared secret to allow POST /run?token=... manual triggers

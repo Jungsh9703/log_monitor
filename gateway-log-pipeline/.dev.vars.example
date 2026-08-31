@@ -20,6 +20,13 @@ CF_API_TOKEN=
 CF_ACCESS_CLIENT_ID=
 CF_ACCESS_CLIENT_SECRET=
 
+# Base64 DLP Payload Encryption private key (Zero Trust dashboard ->
+# Settings -> DLP -> DLP Payload Encryption public key). Decrypts
+# gen_ai_prompt_request/response/conversation and DLP matched-data context
+# in gateway_http logs. Leave blank to leave those fields null in Grafana
+# (the encrypted blob still ships inside the raw log either way).
+DLP_PRIVATE_KEY=
+
 # Shared secret gating the manual POST /run?token=... test endpoint. Leave
 # blank to allow unauthenticated manual triggers (fine for local dev only).
 RUN_TOKEN=

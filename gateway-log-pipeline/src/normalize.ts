@@ -13,6 +13,12 @@ export interface LogRecord {
   srcCountry: string | null;
   dstCountry: string | null;
   categoryIds: number[];
+  /** Decrypted separately in ingest.ts (see dlp.ts) -- normalizeRecord
+   * always initializes these to null since it's synchronous. */
+  genAiPromptRequest: string | null;
+  genAiPromptResponse: string | null;
+  genAiConversation: string | null;
+  dlpMatchedContext: Record<string, string> | null;
   /** Full original log record, so nothing is dropped on the way in --
    * Loki (backed by Azure Blob) is the only durable store here. */
   raw: Record<string, unknown>;
@@ -79,6 +85,10 @@ export function normalizeRecord(raw: Record<string, unknown>, policyNames?: Map<
     srcCountry: str(raw.src_country),
     dstCountry: str(raw.dst_country),
     categoryIds: numArray(raw.category_ids),
+    genAiPromptRequest: null,
+    genAiPromptResponse: null,
+    genAiConversation: null,
+    dlpMatchedContext: null,
     raw,
   };
 }

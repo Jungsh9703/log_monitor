@@ -37,4 +37,15 @@ export interface Env {
   CF_ACCOUNT_ID?: string;
   /** API token with Account > Zero Trust > Read permission. */
   CF_API_TOKEN?: string;
+
+  /** DLP Payload Encryption private key (base64, X25519), from Zero Trust
+   * dashboard -> Settings -> DLP -> DLP Payload Encryption public key.
+   * Decrypts gen_ai_prompt_request/response/conversation and DLP matched-
+   * data context -- see dlp.ts and crypto.ts. Optional: unset just leaves
+   * those fields null (the encrypted blob still ships inside `raw`). */
+  DLP_PRIVATE_KEY?: string;
+  /** Cap on HPKE decrypt operations per cron run, shared across all matched
+   * lines -- each is a real ECDH + AEAD op, so a burst of matches in one
+   * run shouldn't blow the Workers CPU budget. */
+  MAX_DECRYPTIONS_PER_RUN: string;
 }

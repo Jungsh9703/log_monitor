@@ -172,6 +172,30 @@ Grafana에 정책 이름 대신 UUID가 표시될 뿐, 다른 기능에는 지�
 
 30분 캐시(Durable Object에 저장)로 API를 매 cron마다 호출하지 않도록 했습니다.
 
+**선택: GenAI prompt / DLP 매치 내용 복호화** — Gateway HTTP 정책의 "Capture generative AI
+prompt content in logs"나 DLP 정책이 매치됐을 때, `gateway_http` 로그에는 해당 내용이 HPKE로
+암호화된 채로 실립니다(`gen_ai_prompt_request`/`response`/`conversation`,
+`dlp_match_context_parsed.p`). Zero Trust 대시보드의 "Decrypt payload log" 버튼과 똑같은
+방식(로컬에서 private key로 복호화)으로, 이 Worker가 대신 복호화해서 Grafana에서 바로 볼 수
+있게 해주는 기능입니다 (`../workers`(AI Prompt Log Dashboard) 프로젝트와 같은 방식 재사용).
+
+이미 DLP Payload Encryption 키 페어를 만들어두셨다면:
+
+```bash
+wrangler secret put DLP_PRIVATE_KEY   # 그때 저장해둔 base64 private key
+```
+
+**주의**: private key를 잃어버렸거나 아직 키 페어가 없다면, Zero Trust 대시보드 → **Settings
+→ DLP → DLP Payload Encryption public key**에서 새로 생성해야 하는데, **이전에 캡처된 로그는
+새 키로 복호화가 안 됩니다** (키를 바꾸기 전 데이터는 옛날 키로만 풀림). 설정 안 해도 나머지
+기능엔 지장 없고, 암호화된 원본 블롭은 `raw` 필드에 그대로 남아있어서 나중에 언제든 복호화할
+수 있습니다.
+
+1분마다 도는 cron 특성상, 한 번에 매치되는 줄이 몰리면(예: DLP 정책이 대량으로 걸리는 순간)
+`MAX_DECRYPTIONS_PER_RUN`(기본 20) 초과분은 이번 실행에서는 건너뜁니다 — 데이터가 사라지는 건
+아니고, 암호화된 원본은 여전히 Loki에 저장되니 나중에 필요하면 다른 방식으로 복호화할 수
+있습니다.
+
 ### 5. 배포
 
 ```bash

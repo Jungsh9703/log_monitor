@@ -13,6 +13,12 @@ export interface LogRecord {
   srcCountry: string | null;
   dstCountry: string | null;
   categoryIds: number[];
+  /** Resolved via dlpNames (Cloudflare API, see dlp_profile_names.ts) where
+   * possible; otherwise the raw UUID. */
+  uploadDlpProfiles: string[];
+  downloadDlpProfiles: string[];
+  uploadDlpProfileEntries: string[];
+  downloadDlpProfileEntries: string[];
   /** Decrypted separately in ingest.ts (see dlp.ts) -- normalizeRecord
    * always initializes these to null since it's synchronous. */
   genAiPromptRequest: string | null;
@@ -36,6 +42,11 @@ function num(v: unknown): number | null {
 
 function numArray(v: unknown): number[] {
   return Array.isArray(v) ? v.filter((x): x is number => typeof x === "number") : [];
+}
+
+function resolveIdArray(v: unknown, names?: Map<string, string>): string[] {
+  if (!Array.isArray(v)) return [];
+  return v.filter((x): x is string => typeof x === "string" && x.length > 0).map((id) => names?.get(id) ?? id);
 }
 
 /** Parses a Cloudflare log timestamp (RFC3339 or epoch in s/ms/us/ns) into epoch ms. */
@@ -66,8 +77,14 @@ export function parseTimeMs(value: unknown): number {
  * the raw log at all, so a human-readable name can only come from
  * policyNames, resolved separately via the Cloudflare API -- see
  * policy_names.ts), is_isolated, src_country, dst_country, category_ids.
+ * upload/download_matched_dlp_profiles(Entries) are UUID arrays resolved
+ * via dlpNames (dlp_profile_names.ts) the same way.
  */
-export function normalizeRecord(raw: Record<string, unknown>, policyNames?: Map<string, string>): LogRecord {
+export function normalizeRecord(
+  raw: Record<string, unknown>,
+  policyNames?: Map<string, string>,
+  dlpNames?: Map<string, string>,
+): LogRecord {
   const policyId = str(raw.rule_id);
 
   return {
@@ -85,6 +102,10 @@ export function normalizeRecord(raw: Record<string, unknown>, policyNames?: Map<
     srcCountry: str(raw.src_country),
     dstCountry: str(raw.dst_country),
     categoryIds: numArray(raw.category_ids),
+    uploadDlpProfiles: resolveIdArray(raw.upload_matched_dlp_profiles, dlpNames),
+    downloadDlpProfiles: resolveIdArray(raw.download_matched_dlp_profiles, dlpNames),
+    uploadDlpProfileEntries: resolveIdArray(raw.upload_matched_dlp_profileEntries, dlpNames),
+    downloadDlpProfileEntries: resolveIdArray(raw.download_matched_dlp_profileEntries, dlpNames),
     genAiPromptRequest: null,
     genAiPromptResponse: null,
     genAiConversation: null,

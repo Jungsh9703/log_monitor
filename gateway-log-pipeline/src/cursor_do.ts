@@ -6,9 +6,8 @@ export interface ObjectCursor {
 }
 
 const COMPLETED_SET_KEY = "completed-set";
-const POLICY_NAME_CACHE_KEY = "policy-name-cache";
 
-export interface PolicyNameCache {
+export interface NamedCache {
   names: Record<string, string>;
   fetchedAt: number;
 }
@@ -44,11 +43,15 @@ export class IngestCursor extends DurableObject {
     await this.ctx.storage.delete(`cursor:${key}`);
   }
 
-  async getPolicyNameCache(): Promise<PolicyNameCache | null> {
-    return (await this.ctx.storage.get<PolicyNameCache>(POLICY_NAME_CACHE_KEY)) ?? null;
+  /** Generic id->name lookup cache, shared by policy_names.ts,
+   * dlp_profile_names.ts, and any future Cloudflare-API-backed resolver --
+   * keyed by an arbitrary cacheKey (e.g. "policy-names", "dlp-profile-names")
+   * so each resolver gets its own independently-TTL'd slot. */
+  async getNamedCache(cacheKey: string): Promise<NamedCache | null> {
+    return (await this.ctx.storage.get<NamedCache>(`named-cache:${cacheKey}`)) ?? null;
   }
 
-  async savePolicyNameCache(cache: PolicyNameCache): Promise<void> {
-    await this.ctx.storage.put(POLICY_NAME_CACHE_KEY, cache);
+  async saveNamedCache(cacheKey: string, cache: NamedCache): Promise<void> {
+    await this.ctx.storage.put(`named-cache:${cacheKey}`, cache);
   }
 }

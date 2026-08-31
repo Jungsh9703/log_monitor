@@ -1,6 +1,7 @@
 import type { Env } from "./env";
-import { getPolicyNameCache, savePolicyNameCache } from "./cursor";
+import { getNamedCache, saveNamedCache } from "./cursor";
 
+const CACHE_KEY = "policy-names";
 // Policies rarely change; refetching the full rule list every 1-minute cron
 // run would be wasteful, so the mapping is cached in the shared Durable
 // Object and only refreshed once this TTL elapses.
@@ -38,14 +39,14 @@ async function fetchPolicyNamesFromApi(env: Env): Promise<Record<string, string>
 export async function getPolicyNameMap(env: Env): Promise<Map<string, string>> {
   if (!env.CF_ACCOUNT_ID || !env.CF_API_TOKEN) return new Map();
 
-  const cached = await getPolicyNameCache(env);
+  const cached = await getNamedCache(env, CACHE_KEY);
   if (cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) {
     return new Map(Object.entries(cached.names));
   }
 
   try {
     const names = await fetchPolicyNamesFromApi(env);
-    await savePolicyNameCache(env, { names, fetchedAt: Date.now() });
+    await saveNamedCache(env, CACHE_KEY, { names, fetchedAt: Date.now() });
     return new Map(Object.entries(names));
   } catch (err) {
     console.warn("gateway-log-pipeline: failed to refresh policy name cache", err);

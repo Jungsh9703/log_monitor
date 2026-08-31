@@ -172,6 +172,17 @@ Grafana에 정책 이름 대신 UUID가 표시될 뿐, 다른 기능에는 지�
 
 30분 캐시(Durable Object에 저장)로 API를 매 cron마다 호출하지 않도록 했습니다.
 
+**선택: DLP 프로필/엔트리 이름 표시** — `*_matched_dlp_profiles`/`*_matched_dlp_profileEntries`도
+정책 ID와 마찬가지로 UUID뿐이라(Cloudflare Zero Trust UI에서는 "카드번호_DLP" 같은 이름으로
+보이는 그 값), 같은 방식으로 `/accounts/{id}/dlp/profiles` API를 조회해서 채워줍니다. 위
+`CF_ACCOUNT_ID`/`CF_API_TOKEN`을 이미 설정했다면 추가 설정 없이 같이 동작합니다 — 토큰
+권한이 부족하면(DLP 프로필 조회가 별도 권한일 수 있음) 이 부분만 조용히 실패하고 원본 UUID로
+표시되니, 이름이 안 뜨면 토큰에 **Account → DLP → Read** 권한을 추가해보세요.
+
+이 API의 개별 엔트리(프로필 안의 세부 탐지 규칙) 이름 필드 구조는 Cloudflare 문서에서 완전한
+예시를 못 찾아서 추정으로 짜놨습니다(`src/dlp_profile_names.ts`) — 프로필 이름은 뜨는데 엔트리
+이름이 안 뜨면 알려주시면 실제 API 응답 보고 고치겠습니다.
+
 **선택: GenAI prompt / DLP 매치 내용 복호화** — Gateway HTTP 정책의 "Capture generative AI
 prompt content in logs"나 DLP 정책이 매치됐을 때, `gateway_http` 로그에는 해당 내용이 HPKE로
 암호화된 채로 실립니다(`gen_ai_prompt_request`/`response`/`conversation`,

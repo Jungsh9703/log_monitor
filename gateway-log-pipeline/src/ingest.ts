@@ -4,6 +4,7 @@ import { loadCompletedSet, saveCompletedSet, getObjectCursor, putObjectCursor, d
 import { normalizeRecord, type LogRecord } from "./normalize";
 import { pushToLoki } from "./loki";
 import { getPolicyNameMap } from "./policy_names";
+import { getDlpNameMap } from "./dlp_profile_names";
 import { decryptFields } from "./dlp";
 
 async function decompressToText(obj: R2ObjectBody, key: string): Promise<string> {
@@ -21,7 +22,11 @@ export async function runIngestion(env: Env): Promise<IngestSummary> {
   const summary: IngestSummary = { objectsTouched: 0, linesRead: 0, recordsShipped: 0 };
   const cfg = loadConfig(env);
 
-  const [completedSet, policyNames] = await Promise.all([loadCompletedSet(env), getPolicyNameMap(env)]);
+  const [completedSet, policyNames, dlpNames] = await Promise.all([
+    loadCompletedSet(env),
+    getPolicyNameMap(env),
+    getDlpNameMap(env),
+  ]);
   const listing = await env.RAW_LOGS_BUCKET.list({ limit: Math.max(cfg.maxObjectsPerRun * 20, 200) });
   const candidateKeys = listing.objects
     .map((o) => o.key)
@@ -55,7 +60,7 @@ export async function runIngestion(env: Env): Promise<IngestSummary> {
       }
       // Unlike gateway-error-pipeline, every parseable line ships -- no
       // Action/HTTPStatusCode gate here.
-      const record = normalizeRecord(raw, policyNames);
+      const record = normalizeRecord(raw, policyNames, dlpNames);
       const decrypted = await decryptFields(raw, env, decryptBudget);
       batchRecords.push({ ...record, ...decrypted });
     }

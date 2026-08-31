@@ -1,32 +1,33 @@
 # Copy to .dev.vars for local `wrangler dev`, or fill in via the
-# "Deploy to Cloudflare" button's setup screen. All of these are optional --
-# the Worker runs fine without them, it just won't be able to reach a
-# Basic-Auth-protected or Cloudflare-Access-protected Loki endpoint.
-# (LOKI_USERNAME is not a secret -- it lives in wrangler.toml's [vars]
-# instead, since it's just an identifier, not sensitive.)
+# "Deploy to Cloudflare" button's setup screen. Optional -- the Worker runs
+# fine without it, it just won't be able to reach a Basic-Auth-protected
+# Loki endpoint. (LOKI_USERNAME is not a secret -- it lives in
+# wrangler.toml's [vars] instead, since it's just an identifier, not
+# sensitive.)
 
 # The htpasswd password for LOKI_USERNAME (see ../loki-grafana-azure-vm),
 # i.e. the primary auth path for the current no-domain nginx setup.
 LOKI_API_KEY=
 
-# API token with Account > Zero Trust > Read, paired with wrangler.toml's
-# CF_ACCOUNT_ID var, used to resolve Gateway PolicyID -> PolicyName via the
-# Cloudflare API (gateway_http's own PolicyName field is often blank). Leave
-# blank to just show the raw PolicyID in Grafana instead.
-CF_API_TOKEN=
-
-# Cloudflare Access Service Token -- only relevant if a domain + Cloudflare
-# Tunnel + Access fronts Loki instead of nginx Basic Auth.
-CF_ACCESS_CLIENT_ID=
-CF_ACCESS_CLIENT_SECRET=
-
 # Base64 DLP Payload Encryption private key (Zero Trust dashboard ->
 # Settings -> DLP -> DLP Payload Encryption public key). Decrypts
-# gen_ai_prompt_request/response/conversation and DLP matched-data context
-# in gateway_http logs. Leave blank to leave those fields null in Grafana
-# (the encrypted blob still ships inside the raw log either way).
+# GenAiPromptRequest/Response/Conversation and DLP matched-data context in
+# gateway_http logs, IF present -- a real delivered object's full field
+# list didn't include either, so this may have no data to act on via
+# Logpush (see README). Leave blank to leave those fields null in Grafana.
 DLP_PRIVATE_KEY=
 
-# Shared secret gating the manual POST /run?token=... test endpoint. Leave
-# blank to allow unauthenticated manual triggers (fine for local dev only).
-RUN_TOKEN=
+# --- Not needed for the current setup -- omitted here so the deploy-button
+# screen doesn't prompt for them as if they were required. Add later with
+# `wrangler secret put <NAME>` (or the Cloudflare dashboard's Variables and
+# Secrets page) if you ever need them -- the code already supports all of
+# them without any further changes:
+#   CF_API_TOKEN / CF_ACCOUNT_ID (wrangler.toml [vars])
+#     -- only used to resolve DLP profile/entry UUIDs to names; PolicyName
+#     already arrives populated so this isn't needed for policy names.
+#   CF_ACCESS_CLIENT_ID / CF_ACCESS_CLIENT_SECRET
+#     -- only relevant if a domain + Cloudflare Tunnel + Access fronts Loki
+#     instead of the current nginx Basic Auth setup.
+#   RUN_TOKEN
+#     -- only needed to require a token on the manual POST /run test
+#     endpoint; unset just leaves it open to anyone who knows the URL.

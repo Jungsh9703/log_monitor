@@ -76,16 +76,18 @@ LOKI_URL = "http://<vm-public-ip>.nip.io:3100/loki/api/v1/push"
 # created with `htpasswd` on the VM (see ../loki-grafana-azure-vm/README.md).
 LOKI_USERNAME = "loki-pusher"
 
-# Not sensitive (visible in the dashboard URL) -- paired with the
-# CF_API_TOKEN secret below to resolve gateway_http's PolicyID to its real
-# name via the Cloudflare API, since PolicyName often arrives blank in the
-# log itself. Optional: leave blank to just show the raw PolicyID instead.
-CF_ACCOUNT_ID = ""
-
 # --- Secrets (do NOT put these in this file) ---
 # wrangler secret put LOKI_API_KEY              # the htpasswd password paired with LOKI_USERNAME above
-# wrangler secret put CF_API_TOKEN              # API token with Account > Zero Trust > Read, paired with CF_ACCOUNT_ID above
-# wrangler secret put DLP_PRIVATE_KEY           # base64 DLP Payload Encryption private key (Zero Trust > Settings > DLP) -- decrypts GenAI prompt capture + DLP matched-data context
-# wrangler secret put CF_ACCESS_CLIENT_ID       # only if a domain + Cloudflare Access fronts Loki instead of nginx Basic Auth
-# wrangler secret put CF_ACCESS_CLIENT_SECRET   # paired with the above
-# wrangler secret put RUN_TOKEN                 # optional: shared secret to allow POST /run?token=... manual triggers
+# wrangler secret put DLP_PRIVATE_KEY           # base64 DLP Payload Encryption private key (Zero Trust > Settings > DLP) -- decrypts GenAI prompt capture + DLP matched-data context, if that data ever shows up via Logpush (see README)
+
+# --- Not needed for the current setup (nginx Basic Auth, no domain, no DLP
+# profile name lookup) -- omitted so neither the deploy-button screen nor a
+# plain `wrangler deploy` treats them as required. Add back later if
+# needed, no code changes required:
+#   CF_ACCOUNT_ID (as a [vars] entry above) + `wrangler secret put CF_API_TOKEN`
+#     -- resolves DLP profile/entry UUIDs to names (PolicyName already
+#     arrives populated, so this isn't needed for policy names anymore)
+#   `wrangler secret put CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET`
+#     -- only if a domain + Cloudflare Tunnel + Access fronts Loki instead
+#   `wrangler secret put RUN_TOKEN`
+#     -- requires a token on the manual POST /run test endpoint

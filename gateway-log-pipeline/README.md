@@ -147,10 +147,10 @@ R2에 쌓인 파일을 열어보니 `PolicyName`이 이미 채워져 있었습�
 1. Cloudflare 대시보드 → 우측 상단 프로필 → **My Profile → API Tokens → Create Token** →
    Custom token → Permissions: **Account → Zero Trust → Read**
 2. 계정 ID는 대시보드 우측 사이드바 또는 `wrangler whoami`로 확인
-3. ```bash
+3. `wrangler.toml`의 `[vars]`에 `CF_ACCOUNT_ID = "..."` 한 줄 추가하고:
+   ```bash
    wrangler secret put CF_API_TOKEN
    ```
-   그리고 `wrangler.toml`의 `CF_ACCOUNT_ID`를 채우기
 
 30분 캐시(Durable Object에 저장)로 API를 매 cron마다 호출하지 않도록 했습니다.
 

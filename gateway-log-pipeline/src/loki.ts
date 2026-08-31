@@ -45,14 +45,18 @@ async function pushBatch(env: Env, records: LogRecord[]): Promise<void> {
       .map((r) => [
         String(r.timestampMs * 1_000_000), // Loki wants a nanosecond epoch string
         JSON.stringify({
-          ray_id: r.rayId,
+          request_id: r.requestId,
           status_code: r.statusCode,
+          method: r.method,
           policy_id: r.policyId,
           policy_name: r.policyName,
           host: r.host,
           url: r.url,
-          method: r.method,
           identity: r.identity,
+          is_isolated: r.isIsolated,
+          src_country: r.srcCountry,
+          dst_country: r.dstCountry,
+          category_ids: r.categoryIds,
           raw: r.raw,
         }),
       ]),

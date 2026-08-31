@@ -158,9 +158,9 @@ wrangler secret put RUN_TOKEN         # 선택
 (도메인을 마련해서 Cloudflare Tunnel + Access로 바꾸는 경우에만 대신 `CF_ACCESS_CLIENT_ID`/
 `CF_ACCESS_CLIENT_SECRET`을 씁니다 — `src/loki.ts`가 둘 다 지원합니다.)
 
-**선택: Gateway 정책 이름 표시** — `gateway_http` 로그의 `PolicyName` 필드가 계정에 따라 빈
-값으로 오는 경우가 많아서(`PolicyID`만 신뢰 가능), Cloudflare API로 ID→이름을 조회해서 채워주는
-기능이 있습니다. 안 하면 Grafana에 정책 이름 대신 UUID가 표시될 뿐, 다른 기능에는 지장 없습니다.
+**선택: Gateway 정책 이름 표시** — `gateway_http` 로그에는 정책 ID(`rule_id`)만 있고 이름
+필드 자체가 없어서, Cloudflare API로 ID→이름을 조회해서 채워주는 기능이 있습니다. 안 하면
+Grafana에 정책 이름 대신 UUID가 표시될 뿐, 다른 기능에는 지장 없습니다.
 
 1. Cloudflare 대시보드 → 우측 상단 프로필 → **My Profile → API Tokens → Create Token** →
    Custom token → Permissions: **Account → Zero Trust → Read**
@@ -183,6 +183,13 @@ npm run deploy
 
 ## 필드 검증 (중요)
 
-`src/normalize.ts`의 필드명은 Cloudflare 공식 `gateway_http` 스키마 기준이지만, 계정/플랜에
-따라 비어 있거나 다를 수 있습니다. Grafana Explore에서 `{job="gateway_http_logs"} | json`으로
-실제 값을 확인하세요 (로그 라인에 `raw`로 원본 전체가 같이 실려 있습니다).
+`src/normalize.ts`의 필드명은 **snake_case**입니다 (`datetime`, `action_name`, `http_host`,
+`http_status_code`, `http_method_name`, `rule_id`, `email`, `user_id` 등) — Cloudflare
+공식 문서에 나오는 PascalCase(`Action`, `HTTPHost` 등)와는 다른 표기입니다. 이 계정의 실제
+Zero Trust 대시보드 → **Logs → HTTP request logs**에서 로그 하나를 펼쳐 **JSON** 탭으로
+확인한 실제 필드명 기준으로 맞춘 것입니다. `action`/`http_method`는 숫자 코드이고
+`action_name`/`http_method_name`이 실제로 쓰는 문자열 필드입니다.
+
+계정/플랜에 따라 필드가 다를 수 있으니, Grafana Explore에서
+`{job="gateway_http_logs"} | json`으로 실제 값을 확인하세요 (로그 라인에 `raw`로 원본 전체가
+같이 실려 있습니다).

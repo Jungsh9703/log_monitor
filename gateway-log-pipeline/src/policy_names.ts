@@ -28,13 +28,12 @@ async function fetchPolicyNamesFromApi(env: Env): Promise<Record<string, string>
 }
 
 /**
- * Resolves Gateway policy IDs to their human-readable names via the
- * Cloudflare API. gateway_http's own PolicyName field is often blank on
- * this account (only PolicyID is reliably populated), so this is an
- * enrichment step, not something normalize.ts can get from the log alone.
- * Returns an empty map -- callers fall back to the raw PolicyID -- if
- * CF_ACCOUNT_ID/CF_API_TOKEN aren't configured or the API call fails; this
- * must never block ingestion.
+ * Resolves Gateway policy IDs (gateway_http's rule_id field) to their
+ * human-readable names via the Cloudflare API -- the raw log has no name
+ * field for this at all, so it's an enrichment step, not something
+ * normalize.ts can get from the log alone. Returns an empty map -- callers
+ * fall back to the raw rule_id -- if CF_ACCOUNT_ID/CF_API_TOKEN aren't
+ * configured or the API call fails; this must never block ingestion.
  */
 export async function getPolicyNameMap(env: Env): Promise<Map<string, string>> {
   if (!env.CF_ACCOUNT_ID || !env.CF_API_TOKEN) return new Map();

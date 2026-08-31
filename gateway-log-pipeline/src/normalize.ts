@@ -13,14 +13,21 @@ export interface LogRecord {
   srcCountry: string | null;
   dstCountry: string | null;
   categoryIds: number[];
+  /** Cloudflare ships these pre-resolved (unlike DLP profile IDs) -- no API
+   * lookup needed. */
+  categoryNames: string[];
   /** Resolved via dlpNames (Cloudflare API, see dlp_profile_names.ts) where
-   * possible; otherwise the raw UUID. */
+   * possible; otherwise the raw UUID -- Logpush has no name field for these. */
   uploadDlpProfiles: string[];
   downloadDlpProfiles: string[];
   uploadDlpProfileEntries: string[];
   downloadDlpProfileEntries: string[];
   /** Decrypted separately in ingest.ts (see dlp.ts) -- normalizeRecord
-   * always initializes these to null since it's synchronous. */
+   * always initializes these to null since it's synchronous. As of writing,
+   * the gateway_http Logpush dataset doesn't appear to include any field
+   * for GenAI prompt capture or DLP matched-data context at all (confirmed
+   * against a real delivered object's full field list), so these likely
+   * stay null regardless of DLP_PRIVATE_KEY -- see dlp.ts's comment. */
   genAiPromptRequest: string | null;
   genAiPromptResponse: string | null;
   genAiConversation: string | null;
@@ -44,9 +51,12 @@ function numArray(v: unknown): number[] {
   return Array.isArray(v) ? v.filter((x): x is number => typeof x === "number") : [];
 }
 
+function strArray(v: unknown): string[] {
+  return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && x.length > 0) : [];
+}
+
 function resolveIdArray(v: unknown, names?: Map<string, string>): string[] {
-  if (!Array.isArray(v)) return [];
-  return v.filter((x): x is string => typeof x === "string" && x.length > 0).map((id) => names?.get(id) ?? id);
+  return strArray(v).map((id) => names?.get(id) ?? id);
 }
 
 /** Parses a Cloudflare log timestamp (RFC3339 or epoch in s/ms/us/ns) into epoch ms. */
@@ -64,48 +74,50 @@ export function parseTimeMs(value: unknown): number {
 }
 
 /**
- * Normalizes every gateway_http log line -- unlike gateway-error-pipeline's
- * extractError, this never filters anything out; every line that parses as
- * JSON becomes one record.
+ * Normalizes every gateway_http log line -- never filters anything out;
+ * every line that parses as JSON becomes one record.
  *
- * Field names are snake_case (confirmed against a real delivered record --
- * NOT the PascalCase field names Cloudflare's docs describe for some other
- * Logpush datasets): datetime (epoch seconds), request_id, action (a
- * numeric code) + action_name (the string we actually want, e.g. "allow"),
- * http_host, http_status_code, http_method_name, url, email, user_id,
- * rule_id (the policy's ID -- there is no rule_name/policy_name field in
- * the raw log at all, so a human-readable name can only come from
- * policyNames, resolved separately via the Cloudflare API -- see
- * policy_names.ts), is_isolated, src_country, dst_country, category_ids.
- * upload/download_matched_dlp_profiles(Entries) are UUID arrays resolved
- * via dlpNames (dlp_profile_names.ts) the same way.
+ * Field names are **PascalCase** -- confirmed against a real object
+ * downloaded directly from the R2 bucket the Logpush job writes to (Action,
+ * PolicyID, PolicyName, HTTPHost, HTTPMethod, HTTPStatusCode, Email,
+ * UserID, RequestID, IsIsolated, SourceIPCountryCode,
+ * DestinationIPCountryCode, CategoryIDs, CategoryNames,
+ * Upload/DownloadMatchedDlpProfiles(Entries), Datetime as an RFC3339
+ * string). This matches Cloudflare's documented Logpush field reference and
+ * the "Configure logpush job" field picker -- NOT the snake_case shape the
+ * Zero Trust dashboard's own "HTTP request logs" viewer shows, which is a
+ * completely separate live-query API with its own schema and is NOT what
+ * ends up in R2. PolicyName arrives already populated in practice (unlike
+ * assumed earlier), so policyNames (the API-resolved fallback, see
+ * policy_names.ts) only kicks in if it's ever blank.
  */
 export function normalizeRecord(
   raw: Record<string, unknown>,
   policyNames?: Map<string, string>,
   dlpNames?: Map<string, string>,
 ): LogRecord {
-  const policyId = str(raw.rule_id);
+  const policyId = str(raw.PolicyID);
 
   return {
-    timestampMs: parseTimeMs(raw.datetime),
-    requestId: str(raw.request_id),
-    action: str(raw.action_name) ?? "unknown",
-    statusCode: num(raw.http_status_code),
-    method: str(raw.http_method_name),
+    timestampMs: parseTimeMs(raw.Datetime),
+    requestId: str(raw.RequestID),
+    action: str(raw.Action) ?? "unknown",
+    statusCode: num(raw.HTTPStatusCode),
+    method: str(raw.HTTPMethod),
     policyId,
-    policyName: (policyId && policyNames?.get(policyId)) || policyId,
-    host: str(raw.http_host),
-    url: str(raw.url),
-    identity: str(raw.email) || str(raw.user_id),
-    isIsolated: raw.is_isolated === true,
-    srcCountry: str(raw.src_country),
-    dstCountry: str(raw.dst_country),
-    categoryIds: numArray(raw.category_ids),
-    uploadDlpProfiles: resolveIdArray(raw.upload_matched_dlp_profiles, dlpNames),
-    downloadDlpProfiles: resolveIdArray(raw.download_matched_dlp_profiles, dlpNames),
-    uploadDlpProfileEntries: resolveIdArray(raw.upload_matched_dlp_profileEntries, dlpNames),
-    downloadDlpProfileEntries: resolveIdArray(raw.download_matched_dlp_profileEntries, dlpNames),
+    policyName: str(raw.PolicyName) || (policyId && policyNames?.get(policyId)) || policyId,
+    host: str(raw.HTTPHost),
+    url: str(raw.URL),
+    identity: str(raw.Email) || str(raw.UserID),
+    isIsolated: raw.IsIsolated === true,
+    srcCountry: str(raw.SourceIPCountryCode),
+    dstCountry: str(raw.DestinationIPCountryCode),
+    categoryIds: numArray(raw.CategoryIDs),
+    categoryNames: strArray(raw.CategoryNames),
+    uploadDlpProfiles: resolveIdArray(raw.UploadMatchedDlpProfiles, dlpNames),
+    downloadDlpProfiles: resolveIdArray(raw.DownloadMatchedDlpProfiles, dlpNames),
+    uploadDlpProfileEntries: resolveIdArray(raw.UploadMatchedDlpProfileEntries, dlpNames),
+    downloadDlpProfileEntries: resolveIdArray(raw.DownloadMatchedDlpProfileEntries, dlpNames),
     genAiPromptRequest: null,
     genAiPromptResponse: null,
     genAiConversation: null,

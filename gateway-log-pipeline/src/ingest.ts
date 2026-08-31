@@ -58,8 +58,7 @@ export async function runIngestion(env: Env): Promise<IngestSummary> {
       } catch {
         continue;
       }
-      // Unlike gateway-error-pipeline, every parseable line ships -- no
-      // Action/HTTPStatusCode gate here.
+      // No filtering -- every parseable line ships, not just errors.
       const record = normalizeRecord(raw, policyNames, dlpNames);
       const decrypted = await decryptFields(raw, env, decryptBudget);
       batchRecords.push({ ...record, ...decrypted });

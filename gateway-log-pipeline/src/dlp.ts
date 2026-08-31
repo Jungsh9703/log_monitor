@@ -30,13 +30,23 @@ interface DlpMatchContextParsed {
 /**
  * Decrypts whatever encrypted content is present on one raw gateway_http
  * record: "Capture generative AI prompt content in logs"
- * (gen_ai_prompt_request/response/conversation) and DLP matched-data
- * context (dlp_match_context_parsed.p entries) -- both use the same HPKE
- * scheme (see crypto.ts). Spends from a shared per-run budget, since each
- * decrypt is a real ECDH + AEAD operation and a burst of matched lines in
- * one 1-minute cron run shouldn't blow the Workers CPU budget. Lines
- * skipped for budget aren't lost -- `raw` (the full original record) ships
- * to Loki regardless, encrypted blob and all, so nothing is unrecoverable.
+ * (GenAiPromptRequest/Response/Conversation) and DLP matched-data context
+ * (DlpMatchContextParsed.p entries) -- both use the same HPKE scheme (see
+ * crypto.ts). Spends from a shared per-run budget, since each decrypt is a
+ * real ECDH + AEAD operation and a burst of matched lines in one 1-minute
+ * cron run shouldn't blow the Workers CPU budget. Lines skipped for budget
+ * aren't lost -- `raw` (the full original record) ships to Loki regardless,
+ * encrypted blob and all, so nothing is unrecoverable.
+ *
+ * CAVEAT: a real object downloaded directly from the Logpush-fed R2 bucket
+ * enumerated ~60 gateway_http fields and included none of the four this
+ * function looks for -- Logpush's gateway_http dataset may simply not
+ * export GenAI prompt capture or DLP matched-data content at all (only
+ * Cloudflare's own Zero Trust dashboard log viewer -- a separate live-query
+ * API, not Logpush -- appears to expose them, e.g. via its "Decrypt payload
+ * log" button). Left in place (checking both likely casings) in case a
+ * differently-configured Logpush job, a DLP-triggered record, or a future
+ * Cloudflare change does include them; this just no-ops otherwise.
  */
 export async function decryptFields(
   raw: Record<string, unknown>,
@@ -46,10 +56,13 @@ export async function decryptFields(
   const privateKey = env.DLP_PRIVATE_KEY;
   if (!privateKey) return NO_DECRYPTED_FIELDS;
 
-  const genAiPromptRequest = str(raw.gen_ai_prompt_request);
-  const genAiPromptResponse = str(raw.gen_ai_prompt_response);
-  const genAiConversation = str(raw.gen_ai_conversation);
-  const dlpContext = raw.dlp_match_context_parsed as DlpMatchContextParsed | null | undefined;
+  const genAiPromptRequest = str(raw.GenAiPromptRequest) ?? str(raw.gen_ai_prompt_request);
+  const genAiPromptResponse = str(raw.GenAiPromptResponse) ?? str(raw.gen_ai_prompt_response);
+  const genAiConversation = str(raw.GenAiConversation) ?? str(raw.gen_ai_conversation);
+  const dlpContext = (raw.DlpMatchContextParsed ?? raw.dlp_match_context_parsed) as
+    | DlpMatchContextParsed
+    | null
+    | undefined;
   const dlpEntries = Object.entries(dlpContext?.p ?? {}).filter(
     (entry): entry is [string, { p: string }] => typeof entry[1]?.p === "string",
   );

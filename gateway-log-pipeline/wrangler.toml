@@ -5,16 +5,14 @@ compatibility_date = "2025-04-01"
 # Designed to run on the Workers Free plan. Keep the default ("bundled")
 # usage model and the per-run budgets below inside the free tier's CPU limit.
 # Note: this ships EVERY gateway_http log line (no error filter), so volume
-# -- and therefore Loki/Azure Blob storage growth -- is much higher than
-# ../gateway-error-pipeline. Tune MAX_OBJECTS_PER_RUN / MAX_LINES_PER_OBJECT_RUN
-# down if a single cron run is taking too long or Loki push requests are
-# timing out.
+# -- and therefore Loki/Azure Blob storage growth -- can be high. Tune
+# MAX_OBJECTS_PER_RUN / MAX_LINES_PER_OBJECT_RUN down if a single cron run
+# is taking too long or Loki push requests are timing out.
 
 # --- R2 bucket that receives the Zero Trust Gateway Logpush job ---
 # Create it first: `wrangler r2 bucket create gateway-log-raw`
 # Then create a Logpush job (dataset: gateway_http) pointed at this bucket
-# -- see README. Use a bucket separate from gateway-error-pipeline's
-# gateway-error-raw so the two jobs/pipelines don't collide.
+# -- see README.
 [[r2_buckets]]
 binding = "RAW_LOGS_BUCKET"
 bucket_name = "gateway-log-raw"

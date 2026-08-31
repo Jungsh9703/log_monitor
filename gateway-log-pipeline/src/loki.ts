@@ -57,6 +57,7 @@ async function pushBatch(env: Env, records: LogRecord[]): Promise<void> {
           src_country: r.srcCountry,
           dst_country: r.dstCountry,
           category_ids: r.categoryIds,
+          category_names: r.categoryNames,
           upload_dlp_profiles: r.uploadDlpProfiles,
           download_dlp_profiles: r.downloadDlpProfiles,
           upload_dlp_profile_entries: r.uploadDlpProfileEntries,

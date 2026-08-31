@@ -36,16 +36,13 @@ Worker cron ──── Loki push (HTTP + Basic Auth) ──▶ VM 공인 IP:31
 
 ## 구성
 
-- [`gateway-log-pipeline/`](gateway-log-pipeline) — **현재 사용 중.** Zero Trust Gateway HTTP
-  로그 **전체**(필터링 없음)를 R2에서 읽어 Loki로 전송하는 Cloudflare Worker. 전체 트래픽
-  기준으로 대시보드를 구성하기 위한 것입니다.
-- [`gateway-error-pipeline/`](gateway-error-pipeline) — **현재 미사용 (보관용).** 같은 구조지만
-  에러(정책 차단 + 업스트림 4xx/5xx)만 걸러서 보내는 버전. 전체 로그 대신 에러만 필요해지면
-  다시 꺼내 쓸 수 있도록 코드는 남겨뒀습니다.
+- [`gateway-log-pipeline/`](gateway-log-pipeline) — **Cloudflare Worker.** Zero Trust
+  Gateway HTTP 로그 **전체**(필터링 없음)를 R2에서 읽어 Loki로 전송합니다. Cloudflare
+  대시보드에서 **Deploy to Cloudflare** 버튼으로 배포한 것도, 지금까지 테스트해온 것도 전부 이
+  폴더 기준입니다 — `wrangler.toml`이 있는 유일한 Worker 프로젝트입니다.
 - [`loki-grafana-azure-vm/`](loki-grafana-azure-vm) — Azure Ubuntu VM에 Loki(Azure Blob
   Storage를 저장 백엔드로 사용) + Grafana를 네이티브 systemd 서비스로 띄우는 스택(컨테이너
-  없음). 위 두 Worker 프로젝트가 공유합니다 (Loki job 라벨이 달라서 Grafana에서 구분됩니다:
-  `gateway_http_logs` vs `gateway_http_errors`).
+  없음, Cloudflare Worker 아님 — VM에 SSH로 들어가서 직접 설치하는 스크립트 모음입니다).
 
 각 디렉터리의 README에 설정/배포 순서가 있습니다. 순서상 `loki-grafana-azure-vm`을 먼저
 띄워서 Loki push URL을 확보한 뒤, `gateway-log-pipeline`을 그 URL로 배포하면 됩니다.

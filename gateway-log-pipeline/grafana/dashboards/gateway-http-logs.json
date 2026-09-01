@@ -3,7 +3,7 @@
   "uid": "gateway-http-logs",
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 3,
+  "version": 4,
   "refresh": "30s",
   "time": { "from": "now-6h", "to": "now" },
   "templating": {
@@ -22,12 +22,12 @@
     {
       "id": 1,
       "type": "stat",
-      "title": "Total requests (last 1h)",
+      "title": "Total requests (selected time range)",
       "gridPos": { "h": 8, "w": 6, "x": 0, "y": 0 },
       "datasource": { "type": "loki", "uid": "loki" },
       "targets": [
         {
-          "expr": "sum(count_over_time({job=\"gateway_http_logs\"} | json | identity=~\"$identity\" [1h]))",
+          "expr": "sum(count_over_time({job=\"gateway_http_logs\"} | json | identity=~\"$identity\" [$__range]))",
           "refId": "A"
         }
       ]
@@ -49,12 +49,12 @@
     {
       "id": 4,
       "type": "bargauge",
-      "title": "Top hosts by traffic (last 1h)",
+      "title": "Top hosts by traffic (selected time range)",
       "gridPos": { "h": 8, "w": 6, "x": 0, "y": 8 },
       "datasource": { "type": "loki", "uid": "loki" },
       "targets": [
         {
-          "expr": "topk(10, sum by (host) (count_over_time({job=\"gateway_http_logs\"} | json | host != \"\" | identity=~\"$identity\" [1h])))",
+          "expr": "topk(10, sum by (host) (count_over_time({job=\"gateway_http_logs\"} | json | host != \"\" | identity=~\"$identity\" [$__range])))",
           "refId": "A"
         }
       ]
@@ -62,12 +62,12 @@
     {
       "id": 5,
       "type": "table",
-      "title": "Status code distribution (last 1h)",
+      "title": "Status code distribution (selected time range)",
       "gridPos": { "h": 6, "w": 8, "x": 0, "y": 16 },
       "datasource": { "type": "loki", "uid": "loki" },
       "targets": [
         {
-          "expr": "sum by (status_code) (count_over_time({job=\"gateway_http_logs\"} | json | status_code != \"\" | identity=~\"$identity\" [1h]))",
+          "expr": "sum by (status_code) (count_over_time({job=\"gateway_http_logs\"} | json | status_code != \"\" | identity=~\"$identity\" [$__range]))",
           "refId": "A",
           "instant": true,
           "format": "table"
@@ -77,12 +77,12 @@
     {
       "id": 6,
       "type": "table",
-      "title": "Top blocked/isolated policies (last 1h)",
+      "title": "Top blocked/isolated policies (selected time range)",
       "gridPos": { "h": 6, "w": 8, "x": 8, "y": 16 },
       "datasource": { "type": "loki", "uid": "loki" },
       "targets": [
         {
-          "expr": "sum by (policy_name) (count_over_time({job=\"gateway_http_logs\", action!=\"allow\"} | json | policy_name != \"\" | identity=~\"$identity\" [1h]))",
+          "expr": "sum by (policy_name) (count_over_time({job=\"gateway_http_logs\", action!=\"allow\"} | json | policy_name != \"\" | identity=~\"$identity\" [$__range]))",
           "refId": "A",
           "instant": true,
           "format": "table"

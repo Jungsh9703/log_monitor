@@ -46,10 +46,16 @@ new_sqlite_classes = ["IngestCursor"]
 crons = ["*/1 * * * *"]
 
 [vars]
-# Upper bounds per scheduled run, tuned to stay inside the free plan's CPU
-# budget. Raise these only if you've upgraded to a paid Workers plan --
-# and lower them first if volume turns out to be higher than expected.
-MAX_OBJECTS_PER_RUN = "5"
+# Upper bounds per scheduled run. The real constraint in practice is
+# MAX_OBJECTS_PER_RUN, not MAX_LINES_PER_OBJECT_RUN: Logpush tends to write
+# many small objects rather than few large ones, and most of runIngestion's
+# time is spent awaiting I/O (R2 reads, Durable Object calls) -- which does
+# NOT count against the Workers CPU time limit, only actual JS execution
+# does. So raising MAX_OBJECTS_PER_RUN mainly costs wall time, not CPU
+# budget. Watch the Worker's Metrics tab for "Exceeded CPU Time" after
+# changing this -- if it stays at 0 you're still safely inside the Free
+# plan's budget; lower it back down if it isn't.
+MAX_OBJECTS_PER_RUN = "30"
 MAX_LINES_PER_OBJECT_RUN = "2000"
 COMPLETED_SET_CAP = "3000"
 # Cap on HPKE decrypt operations (GenAI prompt capture + DLP matched-data

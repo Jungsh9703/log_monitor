@@ -61,8 +61,14 @@ Durable Object는 Workers **Free 플랜**에서도 동작합니다(예전 저장
 전체 로그를 다 보내므로 트래픽이 많은 계정이면 R2 저장량, Loki 처리량, Azure Blob 저장량이
 빠르게 늘어날 수 있습니다.
 
-- `wrangler.toml`의 `MAX_OBJECTS_PER_RUN`/`MAX_LINES_PER_OBJECT_RUN`을 실제 트래픽에 맞게
-  낮추세요 (기본값은 1분마다 최대 5개 오브젝트 × 2000줄 = 10,000줄).
+- 실제 병목은 보통 `MAX_LINES_PER_OBJECT_RUN`이 아니라 **`MAX_OBJECTS_PER_RUN`**입니다 —
+  Logpush는 큰 오브젝트 몇 개보다 작은 오브젝트를 자주 쓰는 경향이 있어서, 줄 수 한도는
+  넉넉해도 오브젝트 개수 한도에 먼저 걸려 처리가 밀릴 수 있습니다. `runIngestion`은 대부분
+  R2/Durable Object 호출을 기다리는 I/O 시간이라 Workers **CPU 시간** 예산에는 거의 안 잡히고
+  (CPU 시간은 실제 JS 연산만 카운트), 늘려도 주로 **wall time**만 늘어납니다. 값을 바꾼 뒤엔
+  Worker의 **Metrics** 탭에서 **"Exceeded CPU Time"**이 0으로 유지되는지 보면서 Free 플랜
+  기준 안전한지 확인하세요. 트래픽이 분당 200~300줄 정도라면 `MAX_OBJECTS_PER_RUN=30` 정도가
+  기본값입니다 — 그래도 밀리면 더 올리고, 반대로 트래픽이 적다면 낮춰도 됩니다.
 - Loki 쪽 리텐션(`limits_config.retention_period` 등)을 설정해 오래된 로그를 자동 삭제하는
   것도 고려하세요 — `../loki-grafana-azure-vm/loki-config.yml`에는 기본값이 없으니 필요하면
   추가하세요.

@@ -3,7 +3,7 @@
   "uid": "gateway-http-logs",
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 4,
+  "version": 5,
   "refresh": "30s",
   "time": { "from": "now-6h", "to": "now" },
   "templating": {
@@ -55,7 +55,8 @@
       "targets": [
         {
           "expr": "topk(10, sum by (host) (count_over_time({job=\"gateway_http_logs\"} | json | host != \"\" | identity=~\"$identity\" [$__range])))",
-          "refId": "A"
+          "refId": "A",
+          "legendFormat": "{{host}}"
         }
       ]
     },

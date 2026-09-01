@@ -1,0 +1,114 @@
+{
+  "title": "Gateway DLP & GenAI",
+  "uid": "gateway-http-dlp",
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "type": "text",
+      "title": "읽어보세요",
+      "gridPos": { "h": 5, "w": 24, "x": 0, "y": 0 },
+      "options": {
+        "mode": "markdown",
+        "content": "**DLP 매치(어떤 프로필이 걸렸는지)**는 아래 패널에서 확인 가능합니다 -- `Upload/DownloadMatchedDlpProfiles`는 Logpush에 실제로 옵니다.\n\n**GenAI prompt 내용 / DLP에 매치된 실제 텍스트(복호화된 내용)**는 이 파이프라인으로는 안 보일 가능성이 높습니다 -- 실제 R2에 쌓인 `gateway_http` 오브젝트를 전체 필드(Select All 기준 약 60개)로 확인했을 때 `GenAiPromptRequest`/`DlpMatchContext` 같은 필드 자체가 그 목록에 없었습니다. Zero Trust 대시보드의 \"Decrypt payload log\" 버튼은 Logpush와는 별개의 실시간 조회 API를 쓰는 것으로 보입니다. 맨 아래 패널은 혹시 몰라 만들어뒀지만, 계속 비어있으면 그게 원인입니다 -- DLP를 실제로 발생시켜보시고 위쪽(프로필) 패널에만 뜨고 아래쪽(내용)엔 안 뜨는지 확인해주세요."
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "DLP matches (selected time range)",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 5 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "targets": [
+        {
+          "expr": "sum(count_over_time({job=\"gateway_http_logs\"} | json | download_dlp_profiles != \"[]\" or upload_dlp_profiles != \"[]\" [$__range]))",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "DLP matches over time",
+      "gridPos": { "h": 8, "w": 18, "x": 6, "y": 5 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "targets": [
+        {
+          "expr": "sum(count_over_time({job=\"gateway_http_logs\"} | json | download_dlp_profiles != \"[]\" or upload_dlp_profiles != \"[]\" [$__interval]))",
+          "refId": "A",
+          "legendFormat": "DLP matches"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "table",
+      "title": "Top DLP profiles matched -- download (selected time range)",
+      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 13 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "targets": [
+        {
+          "expr": "sum by (download_dlp_profiles) (count_over_time({job=\"gateway_http_logs\"} | json | download_dlp_profiles != \"[]\" [$__range]))",
+          "refId": "A",
+          "instant": true,
+          "format": "table"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "table",
+      "title": "Top DLP profiles matched -- upload (selected time range)",
+      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 13 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "targets": [
+        {
+          "expr": "sum by (upload_dlp_profiles) (count_over_time({job=\"gateway_http_logs\"} | json | upload_dlp_profiles != \"[]\" [$__range]))",
+          "refId": "A",
+          "instant": true,
+          "format": "table"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "logs",
+      "title": "Recent DLP-matched requests (full detail)",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 19 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending"
+      },
+      "targets": [
+        {
+          "expr": "{job=\"gateway_http_logs\"} | json | download_dlp_profiles != \"[]\" or upload_dlp_profiles != \"[]\"",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "logs",
+      "title": "Recent GenAI prompt captures (위 안내 참고 -- 계속 비어있을 수 있음)",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 29 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending"
+      },
+      "targets": [
+        {
+          "expr": "{job=\"gateway_http_logs\"} | json | gen_ai_prompt_request != \"\" or gen_ai_prompt_response != \"\" or gen_ai_conversation != \"\"",
+          "refId": "A"
+        }
+      ]
+    }
+  ]
+}

@@ -3,22 +3,18 @@
   "uid": "gateway-http-logs",
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 2,
+  "version": 3,
   "refresh": "30s",
   "time": { "from": "now-6h", "to": "now" },
   "templating": {
     "list": [
       {
         "name": "identity",
-        "label": "User",
-        "type": "query",
-        "datasource": { "type": "loki", "uid": "loki" },
-        "query": "label_values({job=\"gateway_http_logs\"} | json, identity)",
-        "multi": true,
-        "includeAll": true,
-        "current": { "text": "All", "value": "$__all" },
-        "refresh": 2,
-        "sort": 1
+        "label": "User (email, 정규식)",
+        "type": "textbox",
+        "description": "이메일 일부/전체 입력해서 필터링. 전체 보려면 .* 그대로 두세요 -- identity는 JSON으로 파싱한 필드라 Loki가 자동 드롭다운 목록을 못 만들어줘서 직접 입력 방식입니다.",
+        "query": ".*",
+        "current": { "text": ".*", "value": ".*" }
       }
     ]
   },

@@ -82,17 +82,24 @@ LOKI_URL = "http://<vm-public-ip>.nip.io:3100/loki/api/v1/push"
 # created with `htpasswd` on the VM (see ../loki-grafana-azure-vm/README.md).
 LOKI_USERNAME = "loki-pusher"
 
+# Not sensitive (visible in the dashboard URL) -- paired with the
+# CF_API_TOKEN secret below. Needed in practice: PolicyName does NOT always
+# arrive populated in the real Logpush data (e.g. "bypass" traffic under a
+# system policy like "Do Not Inspect" often omits it, along with several
+# other HTTP-specific fields) -- confirmed against real gateway_http
+# records, not just an assumption. When it's missing, this resolves rule_id
+# via the Cloudflare API instead of showing the raw UUID.
+CF_ACCOUNT_ID = ""
+
 # --- Secrets (do NOT put these in this file) ---
 # wrangler secret put LOKI_API_KEY              # the htpasswd password paired with LOKI_USERNAME above
+# wrangler secret put CF_API_TOKEN              # API token with Account > Zero Trust > Read, paired with CF_ACCOUNT_ID above
 # wrangler secret put DLP_PRIVATE_KEY           # base64 DLP Payload Encryption private key (Zero Trust > Settings > DLP) -- decrypts GenAI prompt capture + DLP matched-data context, if that data ever shows up via Logpush (see README)
 
-# --- Not needed for the current setup (nginx Basic Auth, no domain, no DLP
-# profile name lookup) -- omitted so neither the deploy-button screen nor a
-# plain `wrangler deploy` treats them as required. Add back later if
-# needed, no code changes required:
-#   CF_ACCOUNT_ID (as a [vars] entry above) + `wrangler secret put CF_API_TOKEN`
-#     -- resolves DLP profile/entry UUIDs to names (PolicyName already
-#     arrives populated, so this isn't needed for policy names anymore)
+# --- Not needed for the current setup (nginx Basic Auth, no domain) --
+# omitted so neither the deploy-button screen nor a plain `wrangler deploy`
+# treats them as required. Add back later if needed, no code changes
+# required:
 #   `wrangler secret put CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET`
 #     -- only if a domain + Cloudflare Tunnel + Access fronts Loki instead
 #   `wrangler secret put RUN_TOKEN`

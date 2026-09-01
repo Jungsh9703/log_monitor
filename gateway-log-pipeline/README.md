@@ -144,26 +144,28 @@ wrangler secret put RUN_TOKEN         # 선택
 (도메인을 마련해서 Cloudflare Tunnel + Access로 바꾸는 경우에만 대신 `CF_ACCESS_CLIENT_ID`/
 `CF_ACCESS_CLIENT_SECRET`을 씁니다 — `src/loki.ts`가 둘 다 지원합니다.)
 
-**참고: `PolicyName`은 이미 실제 값으로 옵니다** — 처음엔 이 필드가 계정에 따라 비어 있을
-거라 가정하고 Cloudflare API로 ID→이름을 조회하는 기능(`policy_names.ts`)을 만들었는데, 실제
-R2에 쌓인 파일을 열어보니 `PolicyName`이 이미 채워져 있었습니다(`"Do Not Inspect"` 등). 그래서
-이 API 조회는 이제 **`PolicyName`이 어쩌다 비어 있는 예외적인 경우에만 쓰이는 fallback**입니다
-— 대부분은 아무 설정 없이도 정책 이름이 바로 보입니다. 그래도 fallback을 켜두고 싶다면:
+**선택 아님, 사실상 필수: Gateway 정책 이름 표시** — 처음엔 `PolicyName`이 항상 채워져
+있을 거라 가정했는데, 실제 트래픽으로 확인해보니 **정책/트래픽 유형에 따라 이 필드 자체가
+빠져 있는 경우가 있습니다** — 예를 들어 "Do Not Inspect" 같은 시스템 bypass 정책은
+`HTTPMethod`/`URL`/`RequestID`와 함께 `PolicyName`도 로그에 안 실립니다 (Cloudflare 쪽에서
+그렇게 보내는 것이지 저희 파싱 문제가 아닙니다). 이런 경우 `policy_name`이 UUID로 보이는 걸
+막으려면 Cloudflare API로 ID→이름을 직접 조회하는 이 fallback이 필요합니다.
 
 1. Cloudflare 대시보드 → 우측 상단 프로필 → **My Profile → API Tokens → Create Token** →
-   Custom token → Permissions: **Account → Zero Trust → Read**
+   Custom token → Permissions: **Account → Zero Trust → Read** (계정에 따라 세분화된
+   "Gateway" 전용 권한이 안 보이면 이 `Zero Trust` 항목이 맞습니다)
 2. 계정 ID는 대시보드 우측 사이드바 또는 `wrangler whoami`로 확인
-3. `wrangler.toml`의 `[vars]`에 `CF_ACCOUNT_ID = "..."` 한 줄 추가하고:
+3. `wrangler.toml`의 `[vars]`에 `CF_ACCOUNT_ID = "..."` 채우고:
    ```bash
    wrangler secret put CF_API_TOKEN
    ```
 
 30분 캐시(Durable Object에 저장)로 API를 매 cron마다 호출하지 않도록 했습니다.
 
-**선택: DLP 프로필/엔트리 이름 표시** — `PolicyName`과 달리 `Upload/DownloadMatchedDlpProfiles`
-/`...ProfileEntries`는 실제로 UUID만 옵니다(Cloudflare Zero Trust UI에서는 "카드번호_DLP" 같은
-이름으로 보이는 그 값). 같은 방식으로 `/accounts/{id}/dlp/profiles` API를 조회해서 채워줍니다.
-위 `CF_ACCOUNT_ID`/`CF_API_TOKEN`을 이미 설정했다면 추가 설정 없이 같이 동작합니다 — 토큰
+**선택: DLP 프로필/엔트리 이름 표시** — `Upload/DownloadMatchedDlpProfiles`/`...ProfileEntries`는
+로그에 이름 필드 자체가 없어서(Cloudflare Zero Trust UI에서는 "카드번호_DLP" 같은 이름으로
+보이는 그 값) 항상 UUID로만 옵니다. 같은 방식으로 `/accounts/{id}/dlp/profiles` API를 조회해서
+채워줍니다. 위 `CF_ACCOUNT_ID`/`CF_API_TOKEN`을 이미 설정했다면 추가 설정 없이 같이 동작합니다 — 토큰
 권한이 부족하면(DLP 프로필 조회가 별도 권한일 수 있음) 이 부분만 조용히 실패하고 원본 UUID로
 표시되니, 이름이 안 뜨면 토큰에 **Account → DLP → Read** 권한을 추가해보세요.
 

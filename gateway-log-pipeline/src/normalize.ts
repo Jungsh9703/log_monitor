@@ -87,9 +87,11 @@ export function parseTimeMs(value: unknown): number {
  * the "Configure logpush job" field picker -- NOT the snake_case shape the
  * Zero Trust dashboard's own "HTTP request logs" viewer shows, which is a
  * completely separate live-query API with its own schema and is NOT what
- * ends up in R2. PolicyName arrives already populated in practice (unlike
- * assumed earlier), so policyNames (the API-resolved fallback, see
- * policy_names.ts) only kicks in if it's ever blank.
+ * ends up in R2. PolicyName is blank for some traffic/policy types in
+ * practice (e.g. "bypass" traffic under a system policy like "Do Not
+ * Inspect" omits it along with several other HTTP-specific fields) --
+ * policyNames (the API-resolved fallback, see policy_names.ts) covers
+ * exactly that gap.
  */
 export function normalizeRecord(
   raw: Record<string, unknown>,

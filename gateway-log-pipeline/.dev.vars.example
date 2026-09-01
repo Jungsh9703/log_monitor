@@ -1,13 +1,21 @@
 # Copy to .dev.vars for local `wrangler dev`, or fill in via the
 # "Deploy to Cloudflare" button's setup screen. Optional -- the Worker runs
 # fine without it, it just won't be able to reach a Basic-Auth-protected
-# Loki endpoint. (LOKI_USERNAME is not a secret -- it lives in
-# wrangler.toml's [vars] instead, since it's just an identifier, not
-# sensitive.)
+# Loki endpoint. (LOKI_USERNAME/CF_ACCOUNT_ID are not secrets -- they live
+# in wrangler.toml's [vars] instead, since they're not sensitive.)
 
 # The htpasswd password for LOKI_USERNAME (see ../loki-grafana-azure-vm),
 # i.e. the primary auth path for the current no-domain nginx setup.
 LOKI_API_KEY=
+
+# API token with Account > Zero Trust > Read, paired with wrangler.toml's
+# CF_ACCOUNT_ID var. Resolves gateway_http's rule_id -> policy name (and
+# DLP profile/entry UUIDs -> names) via the Cloudflare API. Needed in
+# practice: PolicyName does NOT always arrive populated in the real log
+# (confirmed against real records -- e.g. "bypass" traffic under a system
+# policy like "Do Not Inspect" often omits it). Leave blank to just show
+# the raw UUID in Grafana for those cases instead.
+CF_API_TOKEN=
 
 # Base64 DLP Payload Encryption private key (Zero Trust dashboard ->
 # Settings -> DLP -> DLP Payload Encryption public key). Decrypts
@@ -20,11 +28,8 @@ DLP_PRIVATE_KEY=
 # --- Not needed for the current setup -- omitted here so the deploy-button
 # screen doesn't prompt for them as if they were required. Add later with
 # `wrangler secret put <NAME>` (or the Cloudflare dashboard's Variables and
-# Secrets page) if you ever need them -- the code already supports all of
-# them without any further changes:
-#   CF_API_TOKEN / CF_ACCOUNT_ID (wrangler.toml [vars])
-#     -- only used to resolve DLP profile/entry UUIDs to names; PolicyName
-#     already arrives populated so this isn't needed for policy names.
+# Secrets page) if you ever need them -- the code already supports both
+# without any further changes:
 #   CF_ACCESS_CLIENT_ID / CF_ACCESS_CLIENT_SECRET
 #     -- only relevant if a domain + Cloudflare Tunnel + Access fronts Loki
 #     instead of the current nginx Basic Auth setup.

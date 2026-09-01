@@ -79,6 +79,20 @@ async function pushBatch(env: Env, records: LogRecord[]): Promise<void> {
 
   if (!res.ok) {
     const body = await res.text().catch(() => "");
+    // Loki rejects individual entries that are too old relative to a
+    // stream's already-seen high-water-mark (per-stream ordering isn't
+    // negotiable), returning 400 while still accepting whatever entries
+    // in the same push WEREN'T too old. This is expected during backlog
+    // catch-up -- once real-time data has advanced a stream's high-water
+    // mark, older backlogged entries for that same stream can never be
+    // accepted, no matter how many times it's retried. Treating this as a
+    // hard failure would keep the R2 object stuck as "not completed"
+    // forever, endlessly re-consuming the run budget on data that can
+    // never succeed. Log and move on instead of throwing.
+    if (res.status === 400 && /too far behind/i.test(body)) {
+      console.warn(`gateway-log-pipeline: Loki rejected some stale entries (expected during backlog catch-up): ${body.slice(0, 300)}`);
+      return;
+    }
     throw new Error(`Loki push failed: ${res.status} ${body.slice(0, 500)}`);
   }
 }

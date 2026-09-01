@@ -78,10 +78,26 @@ export async function runIngestion(env: Env): Promise<IngestSummary> {
 
   summary.recordsShipped = batchRecords.length;
 
-  await pushToLoki(env, batchRecords);
+  // Persist "completed" bookkeeping unconditionally, even if the Loki push
+  // throws -- otherwise a failed push leaves these objects with no cursor
+  // AND not in completedSet, so the next run re-reads them from scratch
+  // and resubmits their (now even staler) original timestamps. Given
+  // Loki's per-stream ordering means a retry of old data is often no more
+  // likely to succeed than the first attempt (time only moves one
+  // direction), that non-atomicity was actively harmful: it could pin the
+  // run budget on the same doomed objects indefinitely. Prefer forward
+  // progress -- still surface the error afterward so it isn't silently lost.
+  let pushError: unknown;
+  try {
+    await pushToLoki(env, batchRecords);
+  } catch (err) {
+    pushError = err;
+  }
 
   for (const k of newlyCompleted) completedSet.add(k);
   await saveCompletedSet(env, completedSet, cfg.completedSetCap);
+
+  if (pushError) throw pushError;
 
   return summary;
 }

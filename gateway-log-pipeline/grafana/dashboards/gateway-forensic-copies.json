@@ -3,7 +3,7 @@
   "uid": "gateway-forensic-copies",
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 1,
+  "version": 2,
   "refresh": "30s",
   "time": { "from": "now-6h", "to": "now" },
   "panels": [
@@ -14,7 +14,7 @@
       "gridPos": { "h": 6, "w": 24, "x": 0, "y": 0 },
       "options": {
         "mode": "markdown",
-        "content": "이 대시보드는 **DLP Forensic Copies** Logpush job(별도 R2 prefix `forensic/`)에서 온 데이터입니다. `gateway-http-dlp` 대시보드가 보여주는 \"어떤 DLP 프로필이 걸렸는지\"와 달리, 여기 `body` 필드는 **실제로 매치된 요청/응답 본문 그 자체**입니다 (base64 디코딩 + 필요 시 gzip/deflate/br 압축 해제까지 마친 상태 -- 암호화된 데이터가 아닙니다, `src/forensic.ts` 참고).\n\n즉 프롬프트/응답 원문 같은 **실제 대화·문서 내용**이 평문으로 그대로 쌓입니다. 개인 테스트 목적으로만 쓰고, 이 대시보드/Loki 스트림(`job=\"gateway_forensic_logs\"`)에 대한 접근을 넓히기 전에 한 번 더 생각해주세요."
+        "content": "이 대시보드는 **DLP Forensic Copies** Logpush job(별도 R2 prefix `forensic/`)에서 온 데이터입니다. `gateway-http-dlp` 대시보드가 보여주는 \"어떤 DLP 프로필이 걸렸는지\"와 달리, 여기 `body` 필드는 **실제로 매치된 요청/응답 본문 그 자체**입니다 (base64 디코딩 + 필요 시 gzip/deflate/br 압축 해제까지 마친 상태 -- 암호화된 데이터가 아닙니다, `src/forensic.ts` 참고).\n\n즉 프롬프트/응답 원문 같은 **실제 대화·문서 내용**이 평문으로 그대로 쌓입니다. 개인 테스트 목적으로만 쓰고, 이 대시보드/Loki 스트림(`job=\"gateway_forensic_logs\"`)에 대한 접근을 넓히기 전에 한 번 더 생각해주세요.\n\n**이 요청을 보낸 사용자(이메일)를 알고 싶다면**: 이 데이터셋 자체엔 사용자 정보가 없습니다(`AccountID, Datetime, ForensicCopyID, GatewayRequestID, Headers, Payload, Phase, TriggeredRuleID`가 전부). 대신 아래 로그 패널에서 관심 있는 항목의 `gateway_request_id` 값을 복사해서, Grafana Explore에서 아래 쿼리를 돌리면 그 요청의 이메일/호스트/정책명이 나옵니다 (같은 요청이라 `gateway_http`의 `request_id`와 값이 같습니다):\n\n```\n{job=\"gateway_http_logs\"} | json | request_id=\"<여기에 gateway_request_id 값>\"\n```"
       }
     },
     {
@@ -56,6 +56,25 @@
           "refId": "A",
           "instant": true,
           "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": { "Time": true },
+            "renameByName": {
+              "triggered_rule_name": "DLP Rule",
+              "Value #A": "Matches"
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "fields": {},
+            "sort": [{ "field": "Matches", "desc": true }]
+          }
         }
       ]
     },

@@ -3,7 +3,7 @@
   "uid": "gateway-forensic-copies",
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 2,
+  "version": 3,
   "refresh": "30s",
   "time": { "from": "now-6h", "to": "now" },
   "panels": [
@@ -48,7 +48,7 @@
       "id": 4,
       "type": "table",
       "title": "Top triggered rules (selected time range)",
-      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 14 },
+      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 14 },
       "datasource": { "type": "loki", "uid": "loki" },
       "targets": [
         {
@@ -76,13 +76,22 @@
             "sort": [{ "field": "Matches", "desc": true }]
           }
         }
-      ]
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Matches" },
+            "properties": [{ "id": "custom.width", "value": 100 }]
+          }
+        ]
+      }
     },
     {
       "id": 5,
       "type": "table",
       "title": "Content types seen (selected time range)",
-      "gridPos": { "h": 6, "w": 8, "x": 8, "y": 14 },
+      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 20 },
       "datasource": { "type": "loki", "uid": "loki" },
       "targets": [
         {
@@ -97,7 +106,7 @@
       "id": 6,
       "type": "table",
       "title": "Decode errors (should stay empty)",
-      "gridPos": { "h": 6, "w": 8, "x": 16, "y": 14 },
+      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 20 },
       "datasource": { "type": "loki", "uid": "loki" },
       "targets": [
         {
@@ -112,7 +121,7 @@
       "id": 7,
       "type": "logs",
       "title": "Recent forensic copies (full body)",
-      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 20 },
+      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 26 },
       "datasource": { "type": "loki", "uid": "loki" },
       "options": {
         "showTime": true,

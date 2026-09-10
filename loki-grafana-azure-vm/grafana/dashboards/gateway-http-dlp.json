@@ -3,7 +3,7 @@
   "uid": "gateway-http-dlp",
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 4,
+  "version": 5,
   "refresh": "30s",
   "time": { "from": "now-6h", "to": "now" },
   "panels": [
@@ -48,7 +48,7 @@
       "id": 4,
       "type": "table",
       "title": "Top DLP profiles matched -- download (selected time range)",
-      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 13 },
+      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 13 },
       "datasource": { "type": "loki", "uid": "loki" },
       "targets": [
         {
@@ -64,7 +64,7 @@
           "options": {
             "excludeByName": { "Time": true },
             "renameByName": {
-              "download_dlp_profiles": "DLP Profile (download)",
+              "download_dlp_profiles": "DLP Profile",
               "Value #A": "Matches"
             }
           }
@@ -76,13 +76,22 @@
             "sort": [{ "field": "Matches", "desc": true }]
           }
         }
-      ]
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Matches" },
+            "properties": [{ "id": "custom.width", "value": 100 }]
+          }
+        ]
+      }
     },
     {
       "id": 5,
       "type": "table",
       "title": "Top DLP profiles matched -- upload (selected time range)",
-      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 13 },
+      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 19 },
       "datasource": { "type": "loki", "uid": "loki" },
       "targets": [
         {
@@ -98,7 +107,7 @@
           "options": {
             "excludeByName": { "Time": true },
             "renameByName": {
-              "upload_dlp_profiles": "DLP Profile (upload)",
+              "upload_dlp_profiles": "DLP Profile",
               "Value #A": "Matches"
             }
           }
@@ -110,13 +119,22 @@
             "sort": [{ "field": "Matches", "desc": true }]
           }
         }
-      ]
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Matches" },
+            "properties": [{ "id": "custom.width", "value": 100 }]
+          }
+        ]
+      }
     },
     {
       "id": 7,
       "type": "table",
       "title": "Top hosts by DLP violations (selected time range)",
-      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 19 },
+      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 25 },
       "datasource": { "type": "loki", "uid": "loki" },
       "targets": [
         {
@@ -144,13 +162,22 @@
             "sort": [{ "field": "Matches", "desc": true }]
           }
         }
-      ]
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Matches" },
+            "properties": [{ "id": "custom.width", "value": 100 }]
+          }
+        ]
+      }
     },
     {
       "id": 6,
       "type": "logs",
       "title": "Recent DLP-matched requests (full detail)",
-      "gridPos": { "h": 16, "w": 24, "x": 0, "y": 25 },
+      "gridPos": { "h": 16, "w": 24, "x": 0, "y": 31 },
       "datasource": { "type": "loki", "uid": "loki" },
       "options": {
         "showTime": true,

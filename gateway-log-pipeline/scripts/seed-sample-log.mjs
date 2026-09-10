@@ -43,6 +43,10 @@ const httpSamples = [
   { Action: "block", HTTPStatusCode: 403, HTTPHost: "social-media.example", URL: "https://social-media.example/feed", HTTPMethod: "GET", PolicyID: "00000003-block-social-media", PolicyName: "Block Social Media", CategoryIDs: [12], CategoryNames: ["Social Networking"] },
   { Action: "allow", HTTPStatusCode: 500, HTTPHost: hosts[1], URL: "https://internal-api.example/v1/reports", HTTPMethod: "GET" },
   { Action: "allow", HTTPStatusCode: 404, HTTPHost: hosts[0], URL: "https://example.com/missing", HTTPMethod: "GET" },
+  // Exercises the DLP-match dashboard panels -- these arrays are the ones
+  // that must survive as Loki-queryable scalars (see loki.ts's comment on
+  // why they're JSON.stringify'd before being embedded in the log line).
+  { Action: "allow", HTTPStatusCode: 200, HTTPHost: "chat.example", URL: "https://chat.example/api", HTTPMethod: "POST", UploadMatchedDlpProfiles: ["카드번호_DLP"] },
 ];
 
 const httpLines = httpSamples.map((s, idx) =>

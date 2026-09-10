@@ -96,12 +96,18 @@ async function pushBatch(env: Env, records: LogRecord[]): Promise<void> {
           is_isolated: r.isIsolated,
           src_country: r.srcCountry,
           dst_country: r.dstCountry,
-          category_ids: r.categoryIds,
-          category_names: r.categoryNames,
-          upload_dlp_profiles: r.uploadDlpProfiles,
-          download_dlp_profiles: r.downloadDlpProfiles,
-          upload_dlp_profile_entries: r.uploadDlpProfileEntries,
-          download_dlp_profile_entries: r.downloadDlpProfileEntries,
+          // Loki's `| json` parser silently DROPS fields whose JSON value is
+          // an array/object (it only extracts scalar strings/numbers/bools)
+          // -- so a native array here would make `download_dlp_profiles`
+          // simply not exist as a label, and `!= "[]"` would then compare
+          // against a missing label (effectively always true) instead of
+          // actually filtering. Pre-stringify so Loki sees a plain string.
+          category_ids: JSON.stringify(r.categoryIds),
+          category_names: JSON.stringify(r.categoryNames),
+          upload_dlp_profiles: JSON.stringify(r.uploadDlpProfiles),
+          download_dlp_profiles: JSON.stringify(r.downloadDlpProfiles),
+          upload_dlp_profile_entries: JSON.stringify(r.uploadDlpProfileEntries),
+          download_dlp_profile_entries: JSON.stringify(r.downloadDlpProfileEntries),
           gen_ai_prompt_request: r.genAiPromptRequest,
           gen_ai_prompt_response: r.genAiPromptResponse,
           gen_ai_conversation: r.genAiConversation,

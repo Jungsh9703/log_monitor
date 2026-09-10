@@ -1,8 +1,9 @@
 import type { Env } from "./env";
-import { loadConfig } from "./config";
+import { loadConfig, type IngestConfig } from "./config";
 import { loadCompletedSet, saveCompletedSet, getObjectCursor, putObjectCursor, deleteObjectCursor } from "./cursor";
 import { normalizeRecord, type LogRecord } from "./normalize";
-import { pushToLoki } from "./loki";
+import { normalizeForensicRecord, type ForensicRecord } from "./forensic";
+import { pushToLoki, pushForensicToLoki } from "./loki";
 import { getPolicyNameMap } from "./policy_names";
 import { getDlpNameMap } from "./dlp_profile_names";
 import { decryptFields } from "./dlp";
@@ -12,30 +13,37 @@ async function decompressToText(obj: R2ObjectBody, key: string): Promise<string>
   return await new Response(stream).text();
 }
 
-export interface IngestSummary {
-  objectsTouched: number;
+interface PrefixResult<T> {
+  records: T[];
+  newlyCompleted: string[];
+  touched: number;
   linesRead: number;
-  recordsShipped: number;
 }
 
-export async function runIngestion(env: Env): Promise<IngestSummary> {
-  const summary: IngestSummary = { objectsTouched: 0, linesRead: 0, recordsShipped: 0 };
-  const cfg = loadConfig(env);
-
-  const [completedSet, policyNames, dlpNames] = await Promise.all([
-    loadCompletedSet(env),
-    getPolicyNameMap(env),
-    getDlpNameMap(env),
-  ]);
-  const listing = await env.RAW_LOGS_BUCKET.list({ limit: Math.max(cfg.maxObjectsPerRun * 20, 200) });
+/**
+ * Shared per-object cursor/resume loop for one R2 prefix. Both Logpush jobs
+ * (gateway_http under HTTP_LOG_PREFIX, DLP forensic copies under
+ * FORENSIC_LOG_PREFIX) land in the same bucket and need identical
+ * list/resume/completed-set bookkeeping -- only how a parsed JSON line turns
+ * into a record differs, via parseLine.
+ */
+async function ingestPrefix<T>(
+  env: Env,
+  cfg: IngestConfig,
+  prefix: string,
+  completedSet: Set<string>,
+  parseLine: (raw: Record<string, unknown>) => Promise<T | null> | T | null,
+): Promise<PrefixResult<T>> {
+  const listing = await env.RAW_LOGS_BUCKET.list({ prefix, limit: Math.max(cfg.maxObjectsPerRun * 20, 200) });
   const candidateKeys = listing.objects
     .map((o) => o.key)
     .filter((k) => !completedSet.has(k))
     .slice(0, cfg.maxObjectsPerRun);
 
-  const batchRecords: LogRecord[] = [];
+  const records: T[] = [];
   const newlyCompleted: string[] = [];
-  const decryptBudget = { remaining: cfg.maxDecryptionsPerRun };
+  let touched = 0;
+  let linesRead = 0;
 
   for (const key of candidateKeys) {
     const obj = await env.RAW_LOGS_BUCKET.get(key);
@@ -58,10 +66,8 @@ export async function runIngestion(env: Env): Promise<IngestSummary> {
       } catch {
         continue;
       }
-      // No filtering -- every parseable line ships, not just errors.
-      const record = normalizeRecord(raw, policyNames, dlpNames);
-      const decrypted = await decryptFields(raw, env, decryptBudget);
-      batchRecords.push({ ...record, ...decrypted });
+      const parsed = await parseLine(raw);
+      if (parsed) records.push(parsed);
     }
 
     const completed = i >= lines.length;
@@ -72,32 +78,70 @@ export async function runIngestion(env: Env): Promise<IngestSummary> {
       await putObjectCursor(env, key, { nextLine: i, totalLines: lines.length });
     }
 
-    summary.objectsTouched++;
-    summary.linesRead += i - startLine;
+    touched++;
+    linesRead += i - startLine;
   }
 
-  summary.recordsShipped = batchRecords.length;
+  return { records, newlyCompleted, touched, linesRead };
+}
 
-  // Persist "completed" bookkeeping unconditionally, even if the Loki push
+export interface IngestSummary {
+  objectsTouched: number;
+  linesRead: number;
+  recordsShipped: number;
+  forensicObjectsTouched: number;
+  forensicLinesRead: number;
+  forensicRecordsShipped: number;
+}
+
+export async function runIngestion(env: Env): Promise<IngestSummary> {
+  const cfg = loadConfig(env);
+
+  const [completedSet, policyNames, dlpNames] = await Promise.all([
+    loadCompletedSet(env),
+    getPolicyNameMap(env),
+    getDlpNameMap(env),
+  ]);
+
+  const decryptBudget = { remaining: cfg.maxDecryptionsPerRun };
+
+  const http = await ingestPrefix<LogRecord>(env, cfg, cfg.httpPrefix, completedSet, async (raw) => {
+    const record = normalizeRecord(raw, policyNames, dlpNames);
+    const decrypted = await decryptFields(raw, env, decryptBudget);
+    return { ...record, ...decrypted };
+  });
+
+  const forensic = await ingestPrefix<ForensicRecord>(env, cfg, cfg.forensicPrefix, completedSet, (raw) =>
+    normalizeForensicRecord(raw, dlpNames),
+  );
+
+  // Persist "completed" bookkeeping unconditionally, even if a Loki push
   // throws -- otherwise a failed push leaves these objects with no cursor
-  // AND not in completedSet, so the next run re-reads them from scratch
-  // and resubmits their (now even staler) original timestamps. Given
-  // Loki's per-stream ordering means a retry of old data is often no more
-  // likely to succeed than the first attempt (time only moves one
-  // direction), that non-atomicity was actively harmful: it could pin the
-  // run budget on the same doomed objects indefinitely. Prefer forward
-  // progress -- still surface the error afterward so it isn't silently lost.
+  // AND not in completedSet, so the next run re-reads them from scratch and
+  // resubmits their (now even staler) original timestamps. Given Loki's
+  // per-stream ordering means a retry of old data is often no more likely
+  // to succeed than the first attempt (time only moves one direction), that
+  // non-atomicity was actively harmful. Prefer forward progress -- still
+  // surface the error afterward so it isn't silently lost.
   let pushError: unknown;
   try {
-    await pushToLoki(env, batchRecords);
+    await pushToLoki(env, http.records);
+    await pushForensicToLoki(env, forensic.records);
   } catch (err) {
     pushError = err;
   }
 
-  for (const k of newlyCompleted) completedSet.add(k);
+  for (const k of [...http.newlyCompleted, ...forensic.newlyCompleted]) completedSet.add(k);
   await saveCompletedSet(env, completedSet, cfg.completedSetCap);
 
   if (pushError) throw pushError;
 
-  return summary;
+  return {
+    objectsTouched: http.touched,
+    linesRead: http.linesRead,
+    recordsShipped: http.records.length,
+    forensicObjectsTouched: forensic.touched,
+    forensicLinesRead: forensic.linesRead,
+    forensicRecordsShipped: forensic.records.length,
+  };
 }

@@ -118,9 +118,35 @@ wrangler r2 bucket create gateway-log-raw
 Cloudflare 대시보드 → 계정 홈 → **Analytics & Logs → Logpush** → Add a Logpush job:
 
 - Dataset: `gateway_http`
-- Destination: 위에서 만든 `gateway-log-raw` R2 버킷
+- Destination: 위에서 만든 `gateway-log-raw` R2 버킷, **prefix를 `http/`로 지정**
+  (destination 문자열 끝에 `/http`를 붙이는 형식 — 대시보드의 R2 설정 화면에 경로 입력란이
+  있습니다). `wrangler.toml`의 `HTTP_LOG_PREFIX`와 정확히 일치해야 Worker가 이 오브젝트들을
+  찾습니다.
 - 필터: 전체를 보고 싶은 목적이므로 걸지 않습니다. 필드는 **Select All**을 권장합니다 —
   `normalize.ts`가 참조하는 필드(`PolicyName`, `CategoryNames` 등)가 빠지지 않도록.
+
+### 2-1. (선택, 민감) DLP Forensic Copies job 추가
+
+같은 R2 버킷에 **prefix `forensic/`**로 두 번째 Logpush job을 추가하면, DLP 정책에 실제로
+매치된 **요청/응답 본문 그 자체**를 받아볼 수 있습니다:
+
+- Dataset: **DLP forensic copies**
+- Destination: 같은 `gateway-log-raw` 버킷, prefix `forensic/` (`FORENSIC_LOG_PREFIX`와 일치)
+- 필드: `AccountID, Datetime, ForensicCopyID, GatewayRequestID, Headers, Payload, Phase,
+  TriggeredRuleID`이 전부입니다 (다른 옵션 없음).
+
+**이 데이터는 암호화되어 있지 않습니다** — 처음엔 "Payload가 암호화된 것 아닌가" 의심했지만,
+실제 샘플 두 건을 직접 디코딩해보니 `Payload`는 그냥 **base64**였습니다. `request` phase
+샘플은 base64 디코딩만으로 바로 읽을 수 있는 평문 JSON(실제 claude.ai 요청 본문)이 나왔고,
+`response` phase 샘플이 무작위로 보였던 건 암호화가 아니라 그 레코드의 `Headers`에 있는
+`content-encoding: br`(Brotli 압축) 때문이었습니다. 즉 필요한 건 개인키 복호화가 아니라
+**base64 디코딩 + `Content-Encoding`에 따른 압축 해제**뿐이고, `src/forensic.ts`가 이걸
+처리합니다 (`node:zlib`의 gunzip/inflate/brotliDecompress — Worker가 `nodejs_compat`
+플래그로 이 모듈을 씁니다, `crypto.ts`의 HPKE 로직과는 무관). **새 시크릿이 필요 없습니다.**
+
+**민감도 주의**: 이건 메타데이터가 아니라 실제 대화/문서 내용입니다 — 개인 테스트 용도로만
+켜두고, `gateway-forensic-copies` Grafana 대시보드나 `job="gateway_forensic_logs"` Loki
+스트림에 대한 접근 범위를 넓히기 전에 다시 한 번 생각해보세요.
 
 ### 3. Azure VM에 Loki + Grafana 배포
 

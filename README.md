@@ -39,7 +39,9 @@ Worker cron ──── Loki push (HTTP + Basic Auth) ──▶ VM 공인 IP:31
 - [`gateway-log-pipeline/`](gateway-log-pipeline) — **Cloudflare Worker.** Zero Trust
   Gateway HTTP 로그 **전체**(필터링 없음)를 R2에서 읽어 Loki로 전송합니다. Cloudflare
   대시보드에서 **Deploy to Cloudflare** 버튼으로 배포한 것도, 지금까지 테스트해온 것도 전부 이
-  폴더 기준입니다 — `wrangler.toml`이 있는 유일한 Worker 프로젝트입니다.
+  폴더 기준입니다 — `wrangler.toml`이 있는 유일한 Worker 프로젝트입니다. (선택, 민감 데이터
+  주의) 같은 R2 버킷의 별도 prefix로 **DLP Forensic Copies**(실제 매치된 요청/응답 본문)도
+  같이 받아 별도 대시보드에 띄울 수 있습니다 — 자세한 내용은 이 폴더의 README 참고.
 - [`loki-grafana-azure-vm/`](loki-grafana-azure-vm) — Azure Ubuntu VM에 Loki(Azure Blob
   Storage를 저장 백엔드로 사용) + Grafana를 네이티브 systemd 서비스로 띄우는 스택(컨테이너
   없음, Cloudflare Worker 아님 — VM에 SSH로 들어가서 직접 설치하는 스크립트 모음입니다).

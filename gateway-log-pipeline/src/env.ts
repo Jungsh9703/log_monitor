@@ -8,6 +8,18 @@ export interface Env {
   MAX_LINES_PER_OBJECT_RUN: string;
   COMPLETED_SET_CAP: string;
 
+  /** R2 key prefix the gateway_http Logpush job writes under, e.g. "http/".
+   * One bucket serves both this job and the forensic copies job below via
+   * separate prefixes instead of needing two buckets. */
+  HTTP_LOG_PREFIX?: string;
+  /** R2 key prefix the "DLP forensic copies" Logpush job writes under, e.g.
+   * "forensic/". Unlike gateway_http, this dataset's Payload field carries
+   * the actual (base64-encoded, sometimes gzip/br-compressed -- NOT
+   * encrypted, see forensic.ts) request/response body content a DLP rule
+   * matched against. Treat this stream/dashboard as more sensitive than the
+   * http traffic one -- it's real request/response content, not metadata. */
+  FORENSIC_LOG_PREFIX?: string;
+
   /** Loki push API endpoint on the Azure VM. Must be a hostname, not a bare
    * IP -- Workers' fetch() routes IP-literal URLs through Cloudflare's edge
    * and gets back its own "error code: 1003" instead of ever reaching the

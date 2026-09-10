@@ -1,11 +1,13 @@
-// Generates a small gzip NDJSON file shaped like a Cloudflare Logpush
-// `gateway_http` delivery and drops it into the local R2 simulator that
-// `wrangler dev` uses, so ingestion can be exercised end-to-end without real
-// Cloudflare/Loki traffic. Field names (PascalCase) and shapes here are
-// copied from a real object downloaded directly from the Logpush-fed R2
-// bucket -- NOT from Cloudflare's docs or the Zero Trust dashboard's log
-// viewer, both of which describe a different (snake_case) schema that
-// turned out to belong to a separate live-query API, not Logpush.
+// Generates small gzip NDJSON files shaped like real Cloudflare Logpush
+// deliveries and drops them into the local R2 simulator that `wrangler dev`
+// uses, so ingestion can be exercised end-to-end without real
+// Cloudflare/Loki traffic. Field names (PascalCase) and shapes are copied
+// from real objects downloaded directly from the Logpush-fed R2 bucket --
+// NOT from Cloudflare's docs or the Zero Trust dashboard's log viewer, both
+// of which describe a different (snake_case) schema belonging to a separate
+// live-query API, not Logpush. Keys are written under HTTP_LOG_PREFIX /
+// FORENSIC_LOG_PREFIX (see wrangler.toml) so runIngestion actually picks
+// them up -- objects outside those prefixes are silently ignored.
 import { gzipSync } from "node:zlib";
 import { writeFileSync, mkdirSync } from "node:fs";
 import { execSync } from "node:child_process";
@@ -16,9 +18,21 @@ function iso(msAgo) {
   return new Date(nowMs - msAgo).toISOString();
 }
 
+function putObject(key, ndjson) {
+  const gz = gzipSync(Buffer.from(ndjson, "utf8"));
+  mkdirSync("scripts/.tmp", { recursive: true });
+  const outPath = `scripts/.tmp/${key.replace(/\//g, "_")}`;
+  writeFileSync(outPath, gz);
+  console.log(`Writing ${key} ...`);
+  execSync(`npx wrangler r2 object put gateway-log-raw/${key} --file="${outPath}" --local`, {
+    stdio: "inherit",
+  });
+}
+
+// --- gateway_http samples ---
 const hosts = ["example.com", "internal-api.example", "docs.example", "cdn.example"];
 
-const samples = [
+const httpSamples = [
   { Action: "allow", HTTPStatusCode: 200, HTTPHost: hosts[0], URL: "https://example.com/", HTTPMethod: "GET" },
   { Action: "allow", HTTPStatusCode: 200, HTTPHost: hosts[1], URL: "https://internal-api.example/v1/orders", HTTPMethod: "GET" },
   { Action: "allow", HTTPStatusCode: 304, HTTPHost: hosts[2], URL: "https://docs.example/guide", HTTPMethod: "GET" },
@@ -31,9 +45,9 @@ const samples = [
   { Action: "allow", HTTPStatusCode: 404, HTTPHost: hosts[0], URL: "https://example.com/missing", HTTPMethod: "GET" },
 ];
 
-const lines = samples.map((s, idx) =>
+const httpLines = httpSamples.map((s, idx) =>
   JSON.stringify({
-    Datetime: iso((samples.length - idx) * 1000),
+    Datetime: iso((httpSamples.length - idx) * 1000),
     RequestID: `req-${String(idx + 1).padStart(4, "0")}`,
     Email: `user${(idx % 4) + 1}@example.com`,
     SourceIPCountryCode: "KR",
@@ -43,16 +57,44 @@ const lines = samples.map((s, idx) =>
     ...s,
   }),
 );
-const ndjson = lines.join("\n") + "\n";
-const gz = gzipSync(Buffer.from(ndjson, "utf8"));
+putObject(`http/sample-${nowMs}.log.gz`, httpLines.join("\n") + "\n");
 
-mkdirSync("scripts/.tmp", { recursive: true });
-const outPath = `scripts/.tmp/sample-${nowMs}.log.gz`;
-writeFileSync(outPath, gz);
+// --- DLP forensic copies samples ---
+// Payload is base64 -- NOT encrypted (see src/forensic.ts and the
+// gateway-log-pipeline README). The "request" sample below decodes straight
+// to plaintext JSON; the "response" sample is additionally gzip-compressed
+// before being base64-encoded, to exercise the Content-Encoding-driven
+// decompression path (real traffic often uses "br" instead -- gzip is used
+// here only because Node's zlib can produce it inline without extra deps).
+const forensicRequestBody = JSON.stringify({ prompt: "샘플 테스트 프롬프트입니다.", model: "claude-test", locale: "ko-KR" });
+const forensicResponseBody = JSON.stringify({ type: "completion", content: "샘플 응답입니다." });
 
-const key = `sample-${nowMs}.log.gz`;
-console.log(`Writing ${lines.length} sample lines to local R2 as ${key} ...`);
-execSync(`npx wrangler r2 object put gateway-log-raw/${key} --file="${outPath}" --local`, {
-  stdio: "inherit",
-});
+const forensicSamples = [
+  {
+    ForensicCopyID: "fc-req-0001",
+    GatewayRequestID: "req-0001",
+    Phase: "request",
+    TriggeredRuleID: "00000009-dlp-rule-sample",
+    Headers: { "content-type": "application/json" },
+    Payload: Buffer.from(forensicRequestBody, "utf8").toString("base64"),
+  },
+  {
+    ForensicCopyID: "fc-req-0002",
+    GatewayRequestID: "req-0001",
+    Phase: "response",
+    TriggeredRuleID: "00000009-dlp-rule-sample",
+    Headers: { "content-type": "text/event-stream", "content-encoding": "gzip" },
+    Payload: gzipSync(Buffer.from(forensicResponseBody, "utf8")).toString("base64"),
+  },
+];
+
+const forensicLines = forensicSamples.map((s, idx) =>
+  JSON.stringify({
+    AccountID: "acct-sample",
+    Datetime: iso((forensicSamples.length - idx) * 1000),
+    ...s,
+  }),
+);
+putObject(`forensic/sample-${nowMs}.log.gz`, forensicLines.join("\n") + "\n");
+
 console.log("Done. Now trigger ingestion with: curl -X POST http://127.0.0.1:8787/run");

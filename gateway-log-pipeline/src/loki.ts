@@ -1,5 +1,6 @@
 import type { Env } from "./env";
 import type { LogRecord } from "./normalize";
+import type { ForensicRecord } from "./forensic";
 
 const MAX_RECORDS_PER_PUSH = 500;
 
@@ -9,6 +10,17 @@ function groupByAction(records: LogRecord[]): Map<string, LogRecord[]> {
     const list = map.get(r.action) ?? [];
     list.push(r);
     map.set(r.action, list);
+  }
+  return map;
+}
+
+function groupByPhase(records: ForensicRecord[]): Map<string, ForensicRecord[]> {
+  const map = new Map<string, ForensicRecord[]>();
+  for (const r of records) {
+    const phase = r.phase ?? "unknown";
+    const list = map.get(phase) ?? [];
+    list.push(r);
+    map.set(phase, list);
   }
   return map;
 }
@@ -33,6 +45,34 @@ function buildHeaders(env: Env): Record<string, string> {
     headers["CF-Access-Client-Secret"] = env.CF_ACCESS_CLIENT_SECRET;
   }
   return headers;
+}
+
+/** Shared POST + error handling for both the http and forensic streams. */
+async function postStreams(env: Env, streams: unknown[], label: string): Promise<void> {
+  const res = await fetch(env.LOKI_URL, {
+    method: "POST",
+    headers: buildHeaders(env),
+    body: JSON.stringify({ streams }),
+  });
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    // Loki rejects individual entries that are too old relative to a
+    // stream's already-seen high-water-mark (per-stream ordering isn't
+    // negotiable), returning 400 while still accepting whatever entries
+    // in the same push WEREN'T too old. This is expected during backlog
+    // catch-up -- once real-time data has advanced a stream's high-water
+    // mark, older backlogged entries for that same stream can never be
+    // accepted, no matter how many times it's retried. Treating this as a
+    // hard failure would keep the R2 object stuck as "not completed"
+    // forever, endlessly re-consuming the run budget on data that can
+    // never succeed. Log and move on instead of throwing.
+    if (res.status === 400 && /too far behind/i.test(body)) {
+      console.warn(`gateway-log-pipeline: Loki rejected some stale ${label} entries (expected during backlog catch-up): ${body.slice(0, 300)}`);
+      return;
+    }
+    throw new Error(`Loki push failed (${label}): ${res.status} ${body.slice(0, 500)}`);
+  }
 }
 
 async function pushBatch(env: Env, records: LogRecord[]): Promise<void> {
@@ -71,30 +111,34 @@ async function pushBatch(env: Env, records: LogRecord[]): Promise<void> {
       ]),
   }));
 
-  const res = await fetch(env.LOKI_URL, {
-    method: "POST",
-    headers: buildHeaders(env),
-    body: JSON.stringify({ streams }),
-  });
+  await postStreams(env, streams, "http");
+}
 
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    // Loki rejects individual entries that are too old relative to a
-    // stream's already-seen high-water-mark (per-stream ordering isn't
-    // negotiable), returning 400 while still accepting whatever entries
-    // in the same push WEREN'T too old. This is expected during backlog
-    // catch-up -- once real-time data has advanced a stream's high-water
-    // mark, older backlogged entries for that same stream can never be
-    // accepted, no matter how many times it's retried. Treating this as a
-    // hard failure would keep the R2 object stuck as "not completed"
-    // forever, endlessly re-consuming the run budget on data that can
-    // never succeed. Log and move on instead of throwing.
-    if (res.status === 400 && /too far behind/i.test(body)) {
-      console.warn(`gateway-log-pipeline: Loki rejected some stale entries (expected during backlog catch-up): ${body.slice(0, 300)}`);
-      return;
-    }
-    throw new Error(`Loki push failed: ${res.status} ${body.slice(0, 500)}`);
-  }
+async function pushForensicBatch(env: Env, records: ForensicRecord[]): Promise<void> {
+  const grouped = groupByPhase(records);
+  const streams = [...grouped.entries()].map(([phase, recs]) => ({
+    stream: { job: "gateway_forensic_logs", phase },
+    values: recs
+      .slice()
+      .sort((a, b) => a.timestampMs - b.timestampMs)
+      .map((r) => [
+        String(r.timestampMs * 1_000_000),
+        JSON.stringify({
+          forensic_copy_id: r.forensicCopyId,
+          gateway_request_id: r.gatewayRequestId,
+          triggered_rule_id: r.triggeredRuleId,
+          triggered_rule_name: r.triggeredRuleName,
+          content_type: r.contentType,
+          content_encoding: r.contentEncoding,
+          body: r.bodyText,
+          body_truncated: r.bodyTruncated,
+          decode_error: r.decodeError,
+          raw: r.raw,
+        }),
+      ]),
+  }));
+
+  await postStreams(env, streams, "forensic");
 }
 
 /**
@@ -119,5 +163,24 @@ export async function pushToLoki(env: Env, records: LogRecord[]): Promise<void> 
 
   for (const batch of chunk(records, MAX_RECORDS_PER_PUSH)) {
     await pushBatch(env, batch);
+  }
+}
+
+/**
+ * Pushes DLP Forensic Copies records to Loki, under a separate
+ * `gateway_forensic_logs` job label so they land in their own streams
+ * (see forensic.ts) rather than mixing with gateway_http traffic. Stream
+ * label is `phase` (request/response -- low cardinality); everything else,
+ * including the decoded body text, rides in the log line body.
+ */
+export async function pushForensicToLoki(env: Env, records: ForensicRecord[]): Promise<void> {
+  if (records.length === 0) return;
+  if (!env.LOKI_URL) {
+    console.warn("gateway-log-pipeline: Loki destination not configured, skipping forensic push");
+    return;
+  }
+
+  for (const batch of chunk(records, MAX_RECORDS_PER_PUSH)) {
+    await pushForensicBatch(env, batch);
   }
 }
